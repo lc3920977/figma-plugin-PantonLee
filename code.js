@@ -1,4 +1,3 @@
-
 /**
  * PantonLEELab · Fit to Parent (AE-style)
  * 功能：
@@ -18,7 +17,7 @@
 // ------------------------------
 // __html__ 会由 Figma 在运行时注入为 ui.html 的内容。
 // 这里控制面板尺寸：你后面想更紧凑/更宽都可以改。
-figma.showUI(__html__, { width: 360, height: 250 });
+figma.showUI(__html__, { width: 360, height: 390 });
 
 // ------------------------------
 // 2) 工具函数：尺寸/容器识别
@@ -249,14 +248,130 @@ function fitSelection(mode) {
 // 5) UI -> 插件：消息接收
 // ------------------------------
 
+// ------------------------------
+// 5.1) 行高预设逻辑（v1）
+// ------------------------------
+
+var LINE_HEIGHT_PRESETS = ['auto', '1.0', '1.1', '1.2', '1.3', '1.4', '1.5', '1.6', '1.8', '2.0'];
+
+function isLineHeightPreset(value) {
+  return typeof value === 'string' && LINE_HEIGHT_PRESETS.indexOf(value) !== -1;
+}
+
+function isLineHeightContainer(node) {
+  return (
+    node &&
+    (node.type === 'FRAME' ||
+      node.type === 'GROUP' ||
+      node.type === 'COMPONENT' ||
+      node.type === 'INSTANCE')
+  );
+}
+
+function collectTextNodes(node, bucket) {
+  if (!node) return;
+  if (node.type === 'TEXT') {
+    bucket.push(node);
+    return;
+  }
+  if ('children' in node && node.children) {
+    for (var i = 0; i < node.children.length; i++) {
+      collectTextNodes(node.children[i], bucket);
+    }
+  }
+}
+
+function roundToHalf(value) {
+  return Math.round(value * 2) / 2;
+}
+
+function dedupeById(nodes) {
+  var map = {};
+  var out = [];
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    if (!n || !n.id) continue;
+    if (!map[n.id]) {
+      map[n.id] = true;
+      out.push(n);
+    }
+  }
+  return out;
+}
+
+async function applyLineHeightPreset(preset) {
+  var selection = figma.currentPage.selection;
+
+  if (!selection || selection.length === 0) {
+    figma.notify('请选择至少一个图层 / Frame');
+    return;
+  }
+
+  var collected = [];
+  for (var i = 0; i < selection.length; i++) {
+    var node = selection[i];
+    if (!node) continue;
+
+    if (node.type === 'TEXT') {
+      collected.push(node);
+      continue;
+    }
+
+    if (isLineHeightContainer(node)) {
+      collectTextNodes(node, collected);
+    }
+  }
+
+  var textNodes = dedupeById(collected);
+
+  if (textNodes.length === 0) {
+    figma.notify('未找到可用文本图层');
+    return;
+  }
+
+  var okCount = 0;
+  var skipCount = 0;
+
+  for (var j = 0; j < textNodes.length; j++) {
+    var t = textNodes[j];
+
+    // v1：跳过 mixed
+    if (t.fontSize === figma.mixed || t.fontName === figma.mixed) {
+      skipCount++;
+      continue;
+    }
+
+    try {
+      await figma.loadFontAsync(t.fontName);
+    } catch (e) {
+      skipCount++;
+      continue;
+    }
+
+    if (preset === 'auto') {
+      t.lineHeight = { unit: 'AUTO' };
+    } else {
+      var scale = Number(preset);
+      var px = roundToHalf(Number(t.fontSize) * scale);
+      t.lineHeight = { unit: 'PIXELS', value: px };
+    }
+
+    okCount++;
+  }
+
+  var msg = '行高预设完成：成功 ' + okCount + ' 个';
+  if (skipCount) msg += '，跳过 ' + skipCount + ' 个';
+  figma.notify(msg);
+}
+
 /**
  * ui.html 里会通过：
  * parent.postMessage({ pluginMessage: { type: 'fit' } }, '*')
  * 发送消息到这里。
  */
-figma.ui.onmessage = function (msg) {
-  if (!msg || !msg.type) {
-    figma.notify('收到空消息');
+figma.ui.onmessage = async function (msg) {
+  if (!msg || typeof msg.type !== 'string') {
+    // 静默忽略无效消息，避免刷屏
     return;
   }
 
@@ -267,7 +382,18 @@ figma.ui.onmessage = function (msg) {
 
   if (msg.type === 'fit' || msg.type === 'fitWidth' || msg.type === 'fitHeight') {
     fitSelection(msg.type);
-    // 不 closePlugin：让面板常驻，方便你连续选不同图层反复点按钮
+    // 不 closePlugin：让面板常驻
+    return;
+  }
+
+  if (msg.type === 'lineHeightPreset') {
+    var preset = msg.preset;
+    if (!isLineHeightPreset(preset)) {
+      figma.notify('行高预设参数不合法');
+      return;
+    }
+
+    await applyLineHeightPreset(preset);
     return;
   }
 
