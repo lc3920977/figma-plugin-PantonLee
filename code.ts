@@ -1,0 +1,271 @@
+/**
+ * PantonLEELab - Fit to Parent (AE-style)
+ *
+ * 目标：在 Figma 里实现类似 After Effects 的：
+ * - 适合复合（Fit）
+ * - 适合复合宽度（Fit Width）
+ * - 适合复合高度（Fit Height）
+ *
+ * 说明：
+ * - Figma 插件无法把功能塞进原生右键菜单，所以我们用一个常驻 UI 面板放 3 个按钮。
+ * - 插件侧（code.ts）负责读选区、计算缩放、resize、居中对齐；
+ * - UI 侧（ui.html）负责按钮点击/快捷键，并通过 postMessage 把命令发给插件。
+ */
+
+// ------------------------------
+// 1) 启动并展示 UI 面板
+// ------------------------------
+// __html__ 是打包工具（或模板）把 ui.html 内联到代码中的变量。
+// showUI 的第二个参数可以控制面板大小。
+figma.showUI(__html__, { width: 360, height: 250 });
+
+// ------------------------------
+// 2) 类型与工具函数
+// ------------------------------
+
+type FitMode = 'fit' | 'fitWidth' | 'fitHeight';
+
+/**
+ * 判断一个节点是否“有尺寸”（width/height）。
+ * - Figma 中很多节点都有 width/height，但 BaseNode 并不保证。
+ */
+function hasSize(node: BaseNode): node is BaseNode & { width: number; height: number } {
+  return 'width' in node && 'height' in node;
+}
+
+/**
+ * 选区里我们允许作为“容器”的节点类型。
+ * - Frame / Component / Instance：最常见容器
+ * - Section：也有尺寸
+ * - Group：也有尺寸（但注意 group 的坐标/布局相对特殊）
+ */
+function isContainerCandidate(
+  node: SceneNode
+): node is SceneNode & { width: number; height: number } {
+  const t = node.type;
+  const isCandidate =
+    t === 'FRAME' ||
+    t === 'COMPONENT' ||
+    t === 'INSTANCE' ||
+    t === 'SECTION' ||
+    t === 'GROUP';
+  return isCandidate && hasSize(node);
+}
+
+/**
+ * 规则：支持“同时选 1 个容器 + 多个子层”。
+ * - 若选区里 (selection.length > 1) 且“恰好只有 1 个容器候选”
+ *   → 把它当容器；其余当 targets；容器自身不参与缩放。
+ * - 否则 → container 为 null，targets 就是 selection（回退到每个节点 fit 到自己的 parent）
+ */
+function getNodeDepth(node: BaseNode): number {
+  // 用来在多个可用容器里做排序；一般用于“选更深层/更贴近用户当前操作的容器”。
+  let d = 0;
+  let p = node.parent;
+  while (p) {
+    d++;
+    p = p.parent;
+  }
+  return d;
+}
+
+function isDescendantOf(node: BaseNode, ancestor: BaseNode): boolean {
+  // 判断 node 是否在 ancestor 之下（任意后代层级）
+  let p = node.parent;
+  while (p) {
+    if (p.id === ancestor.id) return true;
+    p = p.parent;
+  }
+  return false;
+}
+
+function getContainerFromSelection(selection: readonly SceneNode[]): {
+  container: (SceneNode & { width: number; height: number }) | null;
+  targets: SceneNode[];
+} {
+  // 选区 <= 1 个节点时，不启用“选中容器模式”
+  if (selection.length <= 1) {
+    return { container: null, targets: [...selection] };
+  }
+
+  const candidates = selection.filter(isContainerCandidate);
+  if (candidates.length === 0) {
+    return { container: null, targets: [...selection] };
+  }
+
+  // 找出“能包含所有其他选中节点”的容器（也就是：其他节点必须是它的后代）
+  const valid = candidates.filter((c) =>
+    selection.every((n) => n.id === c.id || isDescendantOf(n, c))
+  );
+
+  if (valid.length === 0) {
+    // 没有任何容器能包含所有选中节点 → 回退到 parent 模式
+    return { container: null, targets: [...selection] };
+  }
+
+  // 若有多个 valid（比较少见，比如选区里同时包含多个祖先容器），优先选“最深”的那个
+  valid.sort((a, b) => getNodeDepth(b) - getNodeDepth(a));
+  const container = valid[0];
+  const targets = selection.filter((n) => n.id !== container.id);
+  return { container, targets };
+}
+
+/**
+ * 回退逻辑：如果没有“选中容器”，则默认用 node.parent 作为容器。
+ */
+function getParentContainer(node: SceneNode): (BaseNode & { width: number; height: number }) | null {
+  const p = node.parent;
+  return p && hasSize(p) ? p : null;
+}
+
+/**
+ * 计算缩放系数 s。
+ * - Fit：保持比例，把内容完整塞进容器（类似 contain）
+ * - Fit Width：宽度撑满容器
+ * - Fit Height：高度撑满容器
+ */
+function computeScale(mode: FitMode, pw: number, ph: number, w: number, h: number): number {
+  if (w <= 0 || h <= 0) return 1;
+  if (mode === 'fit') return Math.min(pw / w, ph / h);
+  if (mode === 'fitWidth') return pw / w;
+  return ph / h; // fitHeight
+}
+
+/**
+ * resize：优先使用 resizeWithoutConstraints（如果存在），否则用 resize。
+ * - 这么做的原因：很多节点在约束/自动布局下 resize 会更“顺滑”。
+ */
+function resizeNode(node: SceneNode, w: number, h: number): boolean {
+  const ww = Math.max(0.01, w);
+  const hh = Math.max(0.01, h);
+
+  try {
+    const anyNode = node as any;
+    if (typeof anyNode.resizeWithoutConstraints === 'function') {
+      anyNode.resizeWithoutConstraints(ww, hh);
+      return true;
+    }
+    if (typeof anyNode.resize === 'function') {
+      anyNode.resize(ww, hh);
+      return true;
+    }
+  } catch {
+    // 某些节点（尤其在 Instance 内、或被布局系统强约束）可能会抛错
+  }
+
+  return false;
+}
+
+/**
+ * 判断父容器是否为 Auto Layout。
+ * - 如果父容器是 Auto Layout，子项的 x/y 往往会被布局系统接管。
+ */
+function parentIsAutoLayout(p: BaseNode): p is FrameNode | ComponentNode | InstanceNode {
+  return (
+    (p.type === 'FRAME' || p.type === 'COMPONENT' || p.type === 'INSTANCE') &&
+    'layoutMode' in p &&
+    (p as any).layoutMode !== 'NONE'
+  );
+}
+
+/**
+ * 居中对齐到父容器。
+ * - 若父容器是 Auto Layout：把子项设为 ABSOLUTE（若该属性存在），才能手动设置 x/y。
+ */
+function centerInParent(node: SceneNode, parent: BaseNode & { width: number; height: number }) {
+  if (parentIsAutoLayout(parent)) {
+    const anyNode = node as any;
+    if ('layoutPositioning' in anyNode) {
+      try {
+        anyNode.layoutPositioning = 'ABSOLUTE';
+      } catch {
+        // 并不是所有节点都允许设置这个属性
+      }
+    }
+  }
+
+  try {
+    node.x = (parent.width - node.width) / 2;
+    node.y = (parent.height - node.height) / 2;
+  } catch {
+    // 在少数场景（例如坐标被锁定/不可写）可能失败，忽略即可
+  }
+}
+
+// ------------------------------
+// 3) 核心逻辑：对选区执行 Fit
+// ------------------------------
+
+function fitSelection(mode: FitMode) {
+  const selection = figma.currentPage.selection;
+
+  if (!selection.length) {
+    figma.notify('请选择至少一个图层 / Frame');
+    return;
+  }
+
+  const { container, targets } = getContainerFromSelection(selection);
+
+  let okCount = 0;
+  let skipCount = 0;
+  let skipNotDirectChild = 0;
+
+  for (const node of targets) {
+    // 决定容器：优先用“选中容器”，否则用 node.parent
+    const targetContainer = container ?? getParentContainer(node);
+    if (!targetContainer) {
+      skipCount++;
+      continue;
+    }
+
+    // 若是“选中容器模式”，我们先做一个安全约束：目标必须是容器的直接子层。
+    // 这样能保证 x/y 居中对齐不会因为跨层级坐标系而出错。
+    if (container && node.parent?.id !== container.id) {
+      skipCount++;
+      skipNotDirectChild++;
+      continue;
+    }
+
+    const s = computeScale(mode, targetContainer.width, targetContainer.height, node.width, node.height);
+    const newW = node.width * s;
+    const newH = node.height * s;
+
+    const ok = resizeNode(node, newW, newH);
+    if (!ok) {
+      skipCount++;
+      continue;
+    }
+
+    centerInParent(node, targetContainer);
+    okCount++;
+  }
+
+  const modeName = mode === 'fit' ? 'Fit' : mode === 'fitWidth' ? 'Fit Width' : 'Fit Height';
+
+  let msg = `${modeName} 完成：成功 ${okCount} 个`;
+  if (skipCount) msg += `，跳过 ${skipCount} 个`;
+  if (skipNotDirectChild) msg += `（其中 ${skipNotDirectChild} 个不是容器的直接子层）`;
+
+  figma.notify(msg);
+}
+
+// ------------------------------
+// 4) 接收 UI 面板消息
+// ------------------------------
+
+// UI 侧会用 parent.postMessage({ pluginMessage: { type: 'fit' } }, '*') 发送消息。
+figma.ui.onmessage = (msg: { type: string }) => {
+  if (msg.type === 'close') {
+    figma.closePlugin();
+    return;
+  }
+
+  if (msg.type === 'fit' || msg.type === 'fitWidth' || msg.type === 'fitHeight') {
+    fitSelection(msg.type as FitMode);
+    // 注意：这里不 closePlugin，这样面板可以一直留着，方便连续操作。
+    return;
+  }
+
+  // 兜底：未知消息类型
+  figma.notify(`未知命令：${msg.type}`);
+};

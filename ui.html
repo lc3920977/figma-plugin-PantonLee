@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      /*
+        PantonLEELab · Fit to Parent
+        这是插件 UI 面板（iframe）里的样式。
+        目标：简单、耐看、可快速点击。
+      */
+      body {
+        font: 12px/1.4 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+        margin: 12px;
+        color: rgba(0, 0, 0, 0.85);
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 8px;
+      }
+
+      .logo {
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      button {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 12px;
+        background: #fff;
+        cursor: pointer;
+      }
+
+      button:active {
+        transform: translateY(1px);
+      }
+
+      .hint {
+        margin-top: 10px;
+        color: rgba(0, 0, 0, 0.55);
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 10px;
+      }
+
+      .link {
+        background: transparent;
+        border: none;
+        color: rgba(0, 0, 0, 0.6);
+        text-decoration: underline;
+        padding: 0;
+        cursor: pointer;
+        flex: 0 0 auto;
+      }
+
+      .kbd {
+        color: rgba(0, 0, 0, 0.45);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="header">
+      <!-- 这里放你的 Logo：当前是一个内联 SVG 占位，你可以替换为自己的 SVG（推荐） -->
+      <div class="logo" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1" y="1" width="16" height="16" rx="5" stroke="rgba(0,0,0,0.35)" />
+          <path d="M6 12V6h2.4c1.5 0 2.4.8 2.4 2 0 1.2-.9 2-2.4 2H7.3V12H6Zm1.3-3.2h1.1c.8 0 1.3-.3 1.3-.8s-.5-.8-1.3-.8H7.3v1.6Z" fill="rgba(0,0,0,0.7)"/>
+        </svg>
+      </div>
+      <div class="title">自动适配到容器</div>
+    </div>
+
+    <div class="row">
+      <button id="fit">适合复合</button>
+    </div>
+    <div class="row">
+      <button id="fitW">适合宽度</button>
+      <button id="fitH">适合高度</button>
+    </div>
+
+    <div class="hint">
+      用法1（单选）：选中任意图层 → 点击按钮（保持比例）<br />
+      用法2（多选）：在同一容器内选中多个<strong>子层</strong> → 自动按它们的父级容器适配
+    </div>
+
+    <div class="footer">
+        <div class="kbd">
+            快捷键：1/2/3 · ESC 关闭<br />
+            快捷键使用备注：在插件窗口激活的情况下使用
+        </div>
+      <button class="link" id="close">关闭</button>
+    </div>
+
+    <script>
+      /**
+       * UI -> 插件（code.js）通信方式：
+       * UI 面板运行在 iframe 中，不能直接调用 figma API。
+       * 需要通过 parent.postMessage({ pluginMessage: {...} }, '*')
+       * 把消息发到插件主线程，然后在 code.js 里用 figma.ui.onmessage 接收。
+       */
+      const send = (type) => parent.postMessage({ pluginMessage: { type } }, '*');
+
+      document.getElementById('fit').onclick = () => send('fit');
+      document.getElementById('fitW').onclick = () => send('fitWidth');
+      document.getElementById('fitH').onclick = () => send('fitHeight');
+      document.getElementById('close').onclick = () => send('close');
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === '1') send('fit');
+        if (e.key === '2') send('fitWidth');
+        if (e.key === '3') send('fitHeight');
+        if (e.key === 'Escape') send('close');
+      });
+    </script>
+  </body>
+</html>
