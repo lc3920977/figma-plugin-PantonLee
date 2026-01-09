@@ -41,6 +41,12 @@
         margin-top: 8px;
       }
 
+      .section-title {
+        margin-top: 14px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
       button {
         flex: 1;
         padding: 10px 12px;
@@ -52,6 +58,14 @@
 
       button:active {
         transform: translateY(1px);
+      }
+
+      select {
+        flex: 1;
+        padding: 8px 10px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 10px;
+        background: #fff;
       }
 
       .hint {
@@ -103,6 +117,27 @@
       <button id="fitH">适合高度</button>
     </div>
 
+    <div class="section-title">行高预设</div>
+    <div class="row">
+      <button id="lhAuto">Auto</button>
+      <button id="lhEN">EN 1.2x</button>
+      <button id="lhZH">ZH 1.5x</button>
+    </div>
+    <div class="row">
+      <select id="lineHeightSelect">
+        <option value="auto">Auto — 跟随字体默认</option>
+        <option value="1.0">1.0 — 紧凑排版/数据密集</option>
+        <option value="1.1">1.1 — 英文UI小字号紧凑</option>
+        <option value="1.2">1.2 — EN推荐/英文正文舒适</option>
+        <option value="1.3">1.3 — 英文偏松/副标题</option>
+        <option value="1.4">1.4 — ZH UI推荐/中文正文偏紧</option>
+        <option value="1.5">1.5 — ZH段落推荐/中文段落舒适</option>
+        <option value="1.6">1.6 — ZH衬线/长文推荐</option>
+        <option value="1.8">1.8 — 阅读无障碍/轻松</option>
+        <option value="2.0">2.0 — 超松/强阅读性</option>
+      </select>
+    </div>
+
     <div class="hint">
       用法1（单选）：选中任意图层 → 点击按钮（保持比例）<br />
       用法2（多选）：在同一容器内选中多个<strong>子层</strong> → 自动按它们的父级容器适配
@@ -123,12 +158,21 @@
        * 需要通过 parent.postMessage({ pluginMessage: {...} }, '*')
        * 把消息发到插件主线程，然后在 code.js 里用 figma.ui.onmessage 接收。
        */
-      const send = (type) => parent.postMessage({ pluginMessage: { type } }, '*');
+      const send = (type, payload = {}) => parent.postMessage({ pluginMessage: { type, ...payload } }, '*');
 
       document.getElementById('fit').onclick = () => send('fit');
       document.getElementById('fitW').onclick = () => send('fitWidth');
       document.getElementById('fitH').onclick = () => send('fitHeight');
+      document.getElementById('lhAuto').onclick = () => send('lineHeightPreset', { preset: 'auto' });
+      document.getElementById('lhEN').onclick = () => send('lineHeightPreset', { preset: '1.2' });
+      document.getElementById('lhZH').onclick = () => send('lineHeightPreset', { preset: '1.5' });
       document.getElementById('close').onclick = () => send('close');
+
+      document.getElementById('lineHeightSelect').onchange = (event) => {
+        const preset = event.target.value;
+        if (!preset) return;
+        send('lineHeightPreset', { preset });
+      };
 
       window.addEventListener('keydown', (e) => {
         if (e.key === '1') send('fit');

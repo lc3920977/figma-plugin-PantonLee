@@ -17,13 +17,48 @@
 // ------------------------------
 // __html__ 是打包工具（或模板）把 ui.html 内联到代码中的变量。
 // showUI 的第二个参数可以控制面板大小。
-figma.showUI(__html__, { width: 360, height: 250 });
+figma.showUI(__html__, { width: 360, height: 360 });
 
 // ------------------------------
 // 2) 类型与工具函数
 // ------------------------------
 
 type FitMode = 'fit' | 'fitWidth' | 'fitHeight';
+type LineHeightPreset =
+  | 'auto'
+  | '1.0'
+  | '1.1'
+  | '1.2'
+  | '1.3'
+  | '1.4'
+  | '1.5'
+  | '1.6'
+  | '1.8'
+  | '2.0';
+
+type PluginMessage =
+  | { type: 'fit' }
+  | { type: 'fitWidth' }
+  | { type: 'fitHeight' }
+  | { type: 'close' }
+  | { type: 'lineHeightPreset'; preset: LineHeightPreset };
+
+const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
+  'auto',
+  '1.0',
+  '1.1',
+  '1.2',
+  '1.3',
+  '1.4',
+  '1.5',
+  '1.6',
+  '1.8',
+  '2.0',
+];
+
+function isLineHeightPreset(value: unknown): value is LineHeightPreset {
+  return typeof value === 'string' && LINE_HEIGHT_PRESETS.includes(value as LineHeightPreset);
+}
 
 /**
  * 判断一个节点是否“有尺寸”（width/height）。
@@ -250,22 +285,120 @@ function fitSelection(mode: FitMode) {
 }
 
 // ------------------------------
-// 4) 接收 UI 面板消息
+// 4) 行高预设逻辑
+// ------------------------------
+
+function isLineHeightContainer(
+  node: SceneNode
+): node is FrameNode | GroupNode | ComponentNode | InstanceNode {
+  return (
+    node.type === 'FRAME' ||
+    node.type === 'GROUP' ||
+    node.type === 'COMPONENT' ||
+    node.type === 'INSTANCE'
+  );
+}
+
+function collectTextNodes(node: SceneNode, bucket: TextNode[]) {
+  if (node.type === 'TEXT') {
+    bucket.push(node);
+    return;
+  }
+
+  if ('children' in node) {
+    for (const child of node.children) {
+      collectTextNodes(child, bucket);
+    }
+  }
+}
+
+function roundToHalf(value: number): number {
+  return Math.round(value * 2) / 2;
+}
+
+async function applyLineHeightPreset(preset: LineHeightPreset) {
+  const selection = figma.currentPage.selection;
+
+  if (!selection.length) {
+    figma.notify('请选择至少一个图层 / Frame');
+    return;
+  }
+
+  const collected: TextNode[] = [];
+  for (const node of selection) {
+    if (node.type === 'TEXT') {
+      collected.push(node);
+      continue;
+    }
+    if (isLineHeightContainer(node)) {
+      collectTextNodes(node, collected);
+    }
+  }
+
+  const uniqueTextNodes = Array.from(new Map(collected.map((node) => [node.id, node])).values());
+
+  if (!uniqueTextNodes.length) {
+    figma.notify('未找到可用文本图层');
+    return;
+  }
+
+  let okCount = 0;
+  let skipCount = 0;
+
+  for (const node of uniqueTextNodes) {
+    if (node.fontSize === figma.mixed || node.fontName === figma.mixed) {
+      skipCount++;
+      continue;
+    }
+
+    try {
+      await figma.loadFontAsync(node.fontName);
+    } catch {
+      skipCount++;
+      continue;
+    }
+
+    if (preset === 'auto') {
+      node.lineHeight = { unit: 'AUTO' };
+    } else {
+      const scale = Number(preset);
+      const px = roundToHalf((node.fontSize as number) * scale);
+      node.lineHeight = { unit: 'PIXELS', value: px };
+    }
+
+    okCount++;
+  }
+
+  let msg = `行高预设完成：成功 ${okCount} 个`;
+  if (skipCount) msg += `，跳过 ${skipCount} 个`;
+  figma.notify(msg);
+}
+
+// ------------------------------
+// 5) 接收 UI 面板消息
 // ------------------------------
 
 // UI 侧会用 parent.postMessage({ pluginMessage: { type: 'fit' } }, '*') 发送消息。
-figma.ui.onmessage = (msg: { type: string }) => {
-  if (msg.type === 'close') {
-    figma.closePlugin();
-    return;
-  }
+figma.ui.onmessage = async (msg: PluginMessage | { type?: string; [key: string]: unknown }) => {
+  if (!msg || typeof msg.type !== 'string') return;
 
-  if (msg.type === 'fit' || msg.type === 'fitWidth' || msg.type === 'fitHeight') {
-    fitSelection(msg.type as FitMode);
-    // 注意：这里不 closePlugin，这样面板可以一直留着，方便连续操作。
-    return;
+  switch (msg.type) {
+    case 'close':
+      figma.closePlugin();
+      return;
+    case 'fit':
+    case 'fitWidth':
+    case 'fitHeight':
+      fitSelection(msg.type);
+      // 注意：这里不 closePlugin，这样面板可以一直留着，方便连续操作。
+      return;
+    case 'lineHeightPreset':
+      if (isLineHeightPreset((msg as PluginMessage).preset)) {
+        await applyLineHeightPreset((msg as PluginMessage).preset);
+      }
+      return;
+    default:
+      // 兜底：未知消息类型 → 安全忽略
+      return;
   }
-
-  // 兜底：未知消息类型
-  figma.notify(`未知命令：${msg.type}`);
 };
