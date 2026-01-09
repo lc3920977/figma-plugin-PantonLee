@@ -41,8 +41,28 @@
         margin-top: 8px;
       }
 
-      .section-title {
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         margin-top: 14px;
+      }
+
+      .section-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: rgba(0, 0, 0, 0.7);
+      }
+
+      .section-title {
+        margin-top: 0;
         font-size: 12px;
         font-weight: 600;
       }
@@ -62,37 +82,29 @@
 
       select {
         flex: 1;
-        padding: 8px 10px;
+        padding: 8px 32px 8px 10px; /* 右侧留出空间给下拉箭头 */
         border: 1px solid rgba(0, 0, 0, 0.12);
         border-radius: 10px;
-        background: #fff;
+        background-color: #fff;
+
+        /* 让箭头离右边框远一点（macOS / Chrome / Figma 内嵌 WebView 都生效） */
+        background-image:
+          linear-gradient(45deg, transparent 50%, rgba(0,0,0,0.5) 50%),
+          linear-gradient(135deg, rgba(0,0,0,0.5) 50%, transparent 50%);
+        background-position:
+          calc(100% - 16px) calc(50% - 2px),
+          calc(100% - 11px) calc(50% - 2px);
+        background-size: 5px 5px, 5px 5px;
+        background-repeat: no-repeat;
+
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
       }
 
       .hint {
-        margin-top: 10px;
+        margin-top: 8px;
         color: rgba(0, 0, 0, 0.55);
-      }
-
-      .footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 10px;
-      }
-
-      .link {
-        background: transparent;
-        border: none;
-        color: rgba(0, 0, 0, 0.6);
-        text-decoration: underline;
-        padding: 0;
-        cursor: pointer;
-        flex: 0 0 auto;
-      }
-
-      .kbd {
-        color: rgba(0, 0, 0, 0.45);
-        white-space: nowrap;
       }
     </style>
   </head>
@@ -111,18 +123,27 @@
 
     <div class="row">
       <button id="fit">适合复合</button>
-    </div>
-    <div class="row">
       <button id="fitW">适合宽度</button>
       <button id="fitH">适合高度</button>
     </div>
 
-    <div class="section-title">行高预设</div>
+    <div class="hint">
+      复合变换用法1（单选）：选中任意图层 → 点击按钮（保持比例）<br />
+      复合变换用法2（多选）：在同一容器内选中多个<strong>子层</strong> → 自动按它们的父级容器适配<br />
+      快捷键（仅对本区生效）：1/2/3
+    </div>
+
+    <div class="section-header">
+      <div class="section-icon" aria-hidden="true">T</div>
+      <div class="section-title">行高预设</div>
+    </div>
+
     <div class="row">
       <button id="lhAuto">Auto</button>
       <button id="lhEN">EN 1.2x</button>
       <button id="lhZH">ZH 1.5x</button>
     </div>
+
     <div class="row">
       <select id="lineHeightSelect">
         <option value="auto">Auto — 跟随字体默认</option>
@@ -139,16 +160,8 @@
     </div>
 
     <div class="hint">
-      用法1（单选）：选中任意图层 → 点击按钮（保持比例）<br />
-      用法2（多选）：在同一容器内选中多个<strong>子层</strong> → 自动按它们的父级容器适配
-    </div>
-
-    <div class="footer">
-        <div class="kbd">
-            快捷键：1/2/3 · ESC 关闭<br />
-            快捷键使用备注：在插件窗口激活的情况下使用
-        </div>
-      <button class="link" id="close">关闭</button>
+      行高用法：选中文本（或选中一个容器让它递归处理内部文本） → 点预设按钮/下拉选项<br />
+      说明：遇到混合字号/混合字体（mixed）的文本会自动跳过，并在提示里汇总数量
     </div>
 
     <script>
@@ -166,7 +179,6 @@
       document.getElementById('lhAuto').onclick = () => send('lineHeightPreset', { preset: 'auto' });
       document.getElementById('lhEN').onclick = () => send('lineHeightPreset', { preset: '1.2' });
       document.getElementById('lhZH').onclick = () => send('lineHeightPreset', { preset: '1.5' });
-      document.getElementById('close').onclick = () => send('close');
 
       document.getElementById('lineHeightSelect').onchange = (event) => {
         const preset = event.target.value;
@@ -178,7 +190,6 @@
         if (e.key === '1') send('fit');
         if (e.key === '2') send('fitWidth');
         if (e.key === '3') send('fitHeight');
-        if (e.key === 'Escape') send('close');
       });
     </script>
   </body>
