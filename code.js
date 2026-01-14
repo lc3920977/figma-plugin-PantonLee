@@ -285,13 +285,41 @@ function roundToHalf(value) {
   return Math.round(value * 2) / 2;
 }
 
-var EN_TEXT_REGEX = /^[A-Za-z0-9\s!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]+$/;
-var ZH_TEXT_REGEX = /^[\u4E00-\u9FFF\s，。！？；：“”‘’（）《》【】、《》、—…·￥]+$/;
+var SMART_DOMINANCE_RATIO = 0.7;
+
+function isLatinLetter(char) {
+  return /[A-Za-z]/.test(char);
+}
+
+function isCjkChar(char) {
+  return /[\u4E00-\u9FFF]/.test(char);
+}
 
 function getSmartLineHeightScale(text) {
   if (!text) return null;
-  if (EN_TEXT_REGEX.test(text)) return 1.2;
-  if (ZH_TEXT_REGEX.test(text)) return 1.5;
+
+  var latinCount = 0;
+  var cjkCount = 0;
+
+  for (var i = 0; i < text.length; i++) {
+    var char = text[i];
+    if (isLatinLetter(char)) {
+      latinCount += 1;
+      continue;
+    }
+    if (isCjkChar(char)) {
+      cjkCount += 1;
+    }
+  }
+
+  var total = latinCount + cjkCount;
+  if (total === 0) return null;
+
+  var latinRatio = latinCount / total;
+  var cjkRatio = cjkCount / total;
+
+  if (latinRatio >= SMART_DOMINANCE_RATIO) return 1.2;
+  if (cjkRatio >= SMART_DOMINANCE_RATIO) return 1.5;
   return null;
 }
 

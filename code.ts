@@ -318,15 +318,40 @@ function roundToHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
-const EN_TEXT_REGEX =
-  /^[A-Za-z0-9\s!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]+$/;
-const ZH_TEXT_REGEX =
-  /^[\u4E00-\u9FFF\s，。！？；：“”‘’（）《》【】、《》、—…·￥]+$/;
+const SMART_DOMINANCE_RATIO = 0.7;
+
+function isLatinLetter(char: string): boolean {
+  return /[A-Za-z]/.test(char);
+}
+
+function isCjkChar(char: string): boolean {
+  return /[\u4E00-\u9FFF]/.test(char);
+}
 
 function getSmartLineHeightScale(text: string): number | null {
   if (!text) return null;
-  if (EN_TEXT_REGEX.test(text)) return 1.2;
-  if (ZH_TEXT_REGEX.test(text)) return 1.5;
+
+  let latinCount = 0;
+  let cjkCount = 0;
+
+  for (const char of text) {
+    if (isLatinLetter(char)) {
+      latinCount += 1;
+      continue;
+    }
+    if (isCjkChar(char)) {
+      cjkCount += 1;
+    }
+  }
+
+  const total = latinCount + cjkCount;
+  if (total === 0) return null;
+
+  const latinRatio = latinCount / total;
+  const cjkRatio = cjkCount / total;
+
+  if (latinRatio >= SMART_DOMINANCE_RATIO) return 1.2;
+  if (cjkRatio >= SMART_DOMINANCE_RATIO) return 1.5;
   return null;
 }
 
