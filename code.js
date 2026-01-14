@@ -252,7 +252,7 @@ function fitSelection(mode) {
 // 5.1) 行高预设逻辑（v1）
 // ------------------------------
 
-var LINE_HEIGHT_PRESETS = ['auto', '1.0', '1.1', '1.2', '1.3', '1.4', '1.5', '1.6', '1.8', '2.0'];
+var LINE_HEIGHT_PRESETS = ['auto', 'smart', '1.0', '1.1', '1.2', '1.3', '1.4', '1.5', '1.6', '1.8', '2.0'];
 
 function isLineHeightPreset(value) {
   return typeof value === 'string' && LINE_HEIGHT_PRESETS.indexOf(value) !== -1;
@@ -283,6 +283,16 @@ function collectTextNodes(node, bucket) {
 
 function roundToHalf(value) {
   return Math.round(value * 2) / 2;
+}
+
+var EN_TEXT_REGEX = /^[A-Za-z0-9\s!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]+$/;
+var ZH_TEXT_REGEX = /^[\u4E00-\u9FFF\s，。！？；：“”‘’（）《》【】、《》、—…·￥]+$/;
+
+function getSmartLineHeightScale(text) {
+  if (!text) return null;
+  if (EN_TEXT_REGEX.test(text)) return 1.2;
+  if (ZH_TEXT_REGEX.test(text)) return 1.5;
+  return null;
 }
 
 function dedupeById(nodes) {
@@ -350,6 +360,14 @@ async function applyLineHeightPreset(preset) {
 
     if (preset === 'auto') {
       t.lineHeight = { unit: 'AUTO' };
+    } else if (preset === 'smart') {
+      var smartScale = getSmartLineHeightScale(t.characters);
+      if (!smartScale) {
+        skipCount++;
+        continue;
+      }
+      var smartPx = roundToHalf(Number(t.fontSize) * smartScale);
+      t.lineHeight = { unit: 'PIXELS', value: smartPx };
     } else {
       var scale = Number(preset);
       var px = roundToHalf(Number(t.fontSize) * scale);
@@ -359,7 +377,8 @@ async function applyLineHeightPreset(preset) {
     okCount++;
   }
 
-  var msg = '行高预设完成：成功 ' + okCount + ' 个';
+  var actionLabel = preset === 'smart' ? '智能行高' : '行高预设';
+  var msg = actionLabel + '完成：成功 ' + okCount + ' 个';
   if (skipCount) msg += '，跳过 ' + skipCount + ' 个';
   figma.notify(msg);
 }
@@ -388,14 +407,11 @@ figma.ui.onmessage = async function (msg) {
 
   if (msg.type === 'lineHeightPreset') {
     var preset = msg.preset;
-    if (!isLineHeightPreset(preset)) {
-      figma.notify('行高预设参数不合法');
-      return;
+    if (isLineHeightPreset(preset)) {
+      await applyLineHeightPreset(preset);
     }
-
-    await applyLineHeightPreset(preset);
     return;
   }
 
-  figma.notify('未知命令：' + msg.type);
+  return;
 };

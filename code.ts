@@ -26,6 +26,7 @@ figma.showUI(__html__, { width: 360, height: 390 });
 type FitMode = 'fit' | 'fitWidth' | 'fitHeight';
 type LineHeightPreset =
   | 'auto'
+  | 'smart'
   | '1.0'
   | '1.1'
   | '1.2'
@@ -45,6 +46,7 @@ type PluginMessage =
 
 const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
   'auto',
+  'smart',
   '1.0',
   '1.1',
   '1.2',
@@ -316,6 +318,18 @@ function roundToHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
+const EN_TEXT_REGEX =
+  /^[A-Za-z0-9\s!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]+$/;
+const ZH_TEXT_REGEX =
+  /^[\u4E00-\u9FFF\s，。！？；：“”‘’（）《》【】、《》、—…·￥]+$/;
+
+function getSmartLineHeightScale(text: string): number | null {
+  if (!text) return null;
+  if (EN_TEXT_REGEX.test(text)) return 1.2;
+  if (ZH_TEXT_REGEX.test(text)) return 1.5;
+  return null;
+}
+
 async function applyLineHeightPreset(preset: LineHeightPreset) {
   const selection = figma.currentPage.selection;
 
@@ -360,6 +374,14 @@ async function applyLineHeightPreset(preset: LineHeightPreset) {
 
     if (preset === 'auto') {
       node.lineHeight = { unit: 'AUTO' };
+    } else if (preset === 'smart') {
+      const scale = getSmartLineHeightScale(node.characters);
+      if (!scale) {
+        skipCount++;
+        continue;
+      }
+      const px = roundToHalf((node.fontSize as number) * scale);
+      node.lineHeight = { unit: 'PIXELS', value: px };
     } else {
       const scale = Number(preset);
       const px = roundToHalf((node.fontSize as number) * scale);
@@ -369,7 +391,8 @@ async function applyLineHeightPreset(preset: LineHeightPreset) {
     okCount++;
   }
 
-  let msg = `行高预设完成：成功 ${okCount} 个`;
+  const actionLabel = preset === 'smart' ? '智能行高' : '行高预设';
+  let msg = `${actionLabel}完成：成功 ${okCount} 个`;
   if (skipCount) msg += `，跳过 ${skipCount} 个`;
   figma.notify(msg);
 }
