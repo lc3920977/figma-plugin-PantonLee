@@ -17,7 +17,7 @@
 // ------------------------------
 // __html__ 是打包工具（或模板）把 ui.html 内联到代码中的变量。
 // showUI 的第二个参数可以控制面板大小。
-figma.showUI(__html__, { width: 360, height: 390 });
+figma.showUI(__html__, { width: 360, height: 400 });
 
 // ------------------------------
 // 2) 类型与工具函数
@@ -26,6 +26,7 @@ figma.showUI(__html__, { width: 360, height: 390 });
 type FitMode = 'fit' | 'fitWidth' | 'fitHeight';
 type LineHeightPreset =
   | 'auto'
+  | 'smart'
   | '1.0'
   | '1.1'
   | '1.2'
@@ -45,6 +46,7 @@ type PluginMessage =
 
 const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
   'auto',
+  'smart',
   '1.0',
   '1.1',
   '1.2',
@@ -316,6 +318,43 @@ function roundToHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }
 
+const SMART_DOMINANCE_RATIO = 0.7;
+
+function isLatinLetter(char: string): boolean {
+  return /[A-Za-z]/.test(char);
+}
+
+function isCjkChar(char: string): boolean {
+  return /[\u4E00-\u9FFF]/.test(char);
+}
+
+function getSmartLineHeightScale(text: string): number | null {
+  if (!text) return null;
+
+  let latinCount = 0;
+  let cjkCount = 0;
+
+  for (const char of text) {
+    if (isLatinLetter(char)) {
+      latinCount += 1;
+      continue;
+    }
+    if (isCjkChar(char)) {
+      cjkCount += 1;
+    }
+  }
+
+  const total = latinCount + cjkCount;
+  if (total === 0) return null;
+
+  const latinRatio = latinCount / total;
+  const cjkRatio = cjkCount / total;
+
+  if (latinRatio >= SMART_DOMINANCE_RATIO) return 1.2;
+  if (cjkRatio >= SMART_DOMINANCE_RATIO) return 1.5;
+  return null;
+}
+
 async function applyLineHeightPreset(preset: LineHeightPreset) {
   const selection = figma.currentPage.selection;
 
@@ -360,6 +399,14 @@ async function applyLineHeightPreset(preset: LineHeightPreset) {
 
     if (preset === 'auto') {
       node.lineHeight = { unit: 'AUTO' };
+    } else if (preset === 'smart') {
+      const scale = getSmartLineHeightScale(node.characters);
+      if (!scale) {
+        skipCount++;
+        continue;
+      }
+      const px = roundToHalf((node.fontSize as number) * scale);
+      node.lineHeight = { unit: 'PIXELS', value: px };
     } else {
       const scale = Number(preset);
       const px = roundToHalf((node.fontSize as number) * scale);
@@ -369,7 +416,8 @@ async function applyLineHeightPreset(preset: LineHeightPreset) {
     okCount++;
   }
 
-  let msg = `行高预设完成：成功 ${okCount} 个`;
+  const actionLabel = preset === 'smart' ? '智能行高' : '行高预设';
+  let msg = `${actionLabel}完成：成功 ${okCount} 个`;
   if (skipCount) msg += `，跳过 ${skipCount} 个`;
   figma.notify(msg);
 }

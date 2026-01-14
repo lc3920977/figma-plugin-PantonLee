@@ -76,6 +76,12 @@
         cursor: pointer;
       }
 
+      button.primary {
+        background: #111;
+        border-color: #111;
+        color: #fff;
+      }
+
       button:active {
         transform: translateY(1px);
       }
@@ -140,8 +146,7 @@
 
     <div class="row">
       <button id="lhAuto">Auto</button>
-      <button id="lhEN">EN 1.2x</button>
-      <button id="lhZH">ZH 1.5x</button>
+      <button id="lhSmart" class="primary">智能行高</button>
     </div>
 
     <div class="row">
@@ -161,7 +166,8 @@
 
     <div class="hint">
       行高用法：选中文本（或选中一个容器让它递归处理内部文本） → 点预设按钮/下拉选项<br />
-      说明：遇到混合字号/混合字体（mixed）的文本会自动跳过，并在提示里汇总数量
+      说明：智能行高会自动匹配中英文推荐行高（1.5x/1.2x）；<br />
+      遇到混合字号/混合字体或无法明确判断语言的文本会自动跳过，并在提示里汇总数量
     </div>
 
     <script>
@@ -177,8 +183,7 @@
       document.getElementById('fitW').onclick = () => send('fitWidth');
       document.getElementById('fitH').onclick = () => send('fitHeight');
       document.getElementById('lhAuto').onclick = () => send('lineHeightPreset', { preset: 'auto' });
-      document.getElementById('lhEN').onclick = () => send('lineHeightPreset', { preset: '1.2' });
-      document.getElementById('lhZH').onclick = () => send('lineHeightPreset', { preset: '1.5' });
+      document.getElementById('lhSmart').onclick = () => send('lineHeightPreset', { preset: 'smart' });
 
       document.getElementById('lineHeightSelect').onchange = (event) => {
         const preset = event.target.value;
