@@ -17,7 +17,7 @@
 // ------------------------------
 // __html__ 会由 Figma 在运行时注入为 ui.html 的内容。
 // 这里控制面板尺寸：你后面想更紧凑/更宽都可以改。
-figma.showUI(__html__, { width: 360, height: 400 });
+figma.showUI(__html__, { width: 360, height: 560 });
 
 // ------------------------------
 // 2) 工具函数：尺寸/容器识别
@@ -253,9 +253,19 @@ function fitSelection(mode) {
 // ------------------------------
 
 var LINE_HEIGHT_PRESETS = ['auto', 'smart', '1.0', '1.1', '1.2', '1.3', '1.4', '1.5', '1.6', '1.8', '2.0'];
+var GLOW_PRESETS = ['softWhite', 'spectrum'];
+var GLOW_INTENSITIES = ['low', 'medium', 'high'];
 
 function isLineHeightPreset(value) {
   return typeof value === 'string' && LINE_HEIGHT_PRESETS.indexOf(value) !== -1;
+}
+
+function isGlowPreset(value) {
+  return typeof value === 'string' && GLOW_PRESETS.indexOf(value) !== -1;
+}
+
+function isGlowIntensity(value) {
+  return typeof value === 'string' && GLOW_INTENSITIES.indexOf(value) !== -1;
 }
 
 function isLineHeightContainer(node) {
@@ -411,6 +421,162 @@ async function applyLineHeightPreset(preset) {
   figma.notify(msg);
 }
 
+function isGlowSupportedNode(node) {
+  return (
+    node &&
+    (node.type === 'TEXT' ||
+      node.type === 'VECTOR' ||
+      node.type === 'RECTANGLE' ||
+      node.type === 'ELLIPSE' ||
+      node.type === 'POLYGON' ||
+      node.type === 'STAR' ||
+      node.type === 'LINE' ||
+      node.type === 'BOOLEAN_OPERATION')
+  );
+}
+
+function cloneNode(node) {
+  if (!node || typeof node.clone !== 'function') return null;
+  try {
+    return node.clone();
+  } catch (e) {
+    return null;
+  }
+}
+
+function toPaintColor(rgb, opacity) {
+  return { type: 'SOLID', color: rgb, opacity: opacity };
+}
+
+function setSolidFill(node, rgb, opacity) {
+  if (!node || !('fills' in node)) return;
+  try {
+    node.fills = [toPaintColor(rgb, opacity)];
+  } catch (e) {}
+}
+
+function setStroke(node, rgb, opacity, weight) {
+  if (!node || !('strokes' in node)) return;
+  try {
+    node.strokes = [toPaintColor(rgb, opacity)];
+    if ('strokeWeight' in node) {
+      node.strokeWeight = weight;
+    }
+  } catch (e) {}
+}
+
+function setGlowEffects(node, rgb, opacity, radius) {
+  if (!node || !('effects' in node)) return;
+  try {
+    node.effects = [{
+      type: 'DROP_SHADOW',
+      color: { r: rgb.r, g: rgb.g, b: rgb.b, a: opacity },
+      offset: { x: 0, y: 0 },
+      radius: radius,
+      spread: 0,
+      visible: true,
+      blendMode: 'SCREEN'
+    }];
+  } catch (e) {}
+}
+
+function applyWwdcGlowLayerStyle(layerName, node, preset, intensity) {
+  var intensityScale = intensity === 'low' ? 0.75 : intensity === 'high' ? 1.35 : 1;
+  var coreColor = preset === 'spectrum' ? { r: 1, g: 0.98, b: 0.94 } : { r: 1, g: 0.99, b: 0.97 };
+  var outerColor = preset === 'spectrum' ? { r: 0.78, g: 0.82, b: 1 } : { r: 1, g: 1, b: 1 };
+  var fringeColor = { r: 0.6, g: 0.7, b: 1 };
+
+  if (layerName === 'Base') {
+    node.opacity = 0.92;
+    return;
+  }
+  if (layerName === 'Stroke Highlight') {
+    setStroke(node, { r: 1, g: 1, b: 1 }, 0.7, 1 * intensityScale);
+    node.opacity = 0.92;
+    return;
+  }
+  if (layerName === 'Glow Core') {
+    setSolidFill(node, coreColor, 0.4);
+    setGlowEffects(node, coreColor, 0.5, 8 * intensityScale);
+    node.opacity = 0.8;
+    return;
+  }
+  if (layerName === 'Glow Outer') {
+    setSolidFill(node, outerColor, 0.26);
+    setGlowEffects(node, outerColor, 0.35, 24 * intensityScale);
+    node.opacity = 0.6;
+    return;
+  }
+
+  setSolidFill(node, fringeColor, preset === 'spectrum' ? 0.22 : 0.14);
+  setGlowEffects(node, fringeColor, preset === 'spectrum' ? 0.24 : 0.18, 12 * intensityScale);
+  node.opacity = 0.45;
+}
+
+function applyWwdcGlow(preset, intensity) {
+  var selection = figma.currentPage.selection;
+  if (!selection || selection.length === 0) {
+    figma.notify('请选择文本或支持的形状图层');
+    return;
+  }
+
+  var okCount = 0;
+  var skipUnsupportedCount = 0;
+  var skipNoParentCount = 0;
+  var createdGroups = [];
+
+  for (var i = 0; i < selection.length; i++) {
+    var node = selection[i];
+    if (!isGlowSupportedNode(node)) {
+      skipUnsupportedCount++;
+      continue;
+    }
+    if (!node.parent || !('appendChild' in node.parent)) {
+      skipNoParentCount++;
+      continue;
+    }
+
+    var parent = node.parent;
+    var layerSequence = ['Glow Outer', 'Chromatic Fringe', 'Glow Core', 'Stroke Highlight', 'Base'];
+    var layers = [];
+
+    for (var j = 0; j < layerSequence.length; j++) {
+      var layerName = layerSequence[j];
+      var cloned = cloneNode(node);
+      if (!cloned) continue;
+      cloned.name = layerName;
+      applyWwdcGlowLayerStyle(layerName, cloned, preset, intensity);
+      parent.appendChild(cloned);
+      layers.push(cloned);
+    }
+
+    if (layers.length === 0) {
+      skipUnsupportedCount++;
+      continue;
+    }
+
+    var glowGroup = figma.group(layers, parent);
+    glowGroup.name = 'WWDC Glow / ' + node.name;
+    try {
+      glowGroup.x = node.x;
+      glowGroup.y = node.y;
+    } catch (e) {}
+
+    createdGroups.push(glowGroup);
+    okCount++;
+  }
+
+  if (createdGroups.length > 0) {
+    figma.currentPage.selection = createdGroups;
+    figma.viewport.scrollAndZoomIntoView(createdGroups);
+  }
+
+  var msg = 'WWDC Glow 完成：成功 ' + okCount + ' 个';
+  if (skipUnsupportedCount) msg += '，跳过不支持 ' + skipUnsupportedCount + ' 个';
+  if (skipNoParentCount) msg += '，跳过无父级 ' + skipNoParentCount + ' 个';
+  figma.notify(msg);
+}
+
 /**
  * ui.html 里会通过：
  * parent.postMessage({ pluginMessage: { type: 'fit' } }, '*')
@@ -437,6 +603,13 @@ figma.ui.onmessage = async function (msg) {
     var preset = msg.preset;
     if (isLineHeightPreset(preset)) {
       await applyLineHeightPreset(preset);
+    }
+    return;
+  }
+
+  if (msg.type === 'applyWwdcGlow') {
+    if (isGlowPreset(msg.preset) && isGlowIntensity(msg.intensity)) {
+      applyWwdcGlow(msg.preset, msg.intensity);
     }
     return;
   }

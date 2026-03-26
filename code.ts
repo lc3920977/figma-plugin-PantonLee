@@ -17,7 +17,7 @@
 // ------------------------------
 // __html__ 是打包工具（或模板）把 ui.html 内联到代码中的变量。
 // showUI 的第二个参数可以控制面板大小。
-figma.showUI(__html__, { width: 360, height: 400 });
+figma.showUI(__html__, { width: 360, height: 560 });
 
 // ------------------------------
 // 2) 类型与工具函数
@@ -36,13 +36,16 @@ type LineHeightPreset =
   | '1.6'
   | '1.8'
   | '2.0';
+type GlowPreset = 'softWhite' | 'spectrum';
+type GlowIntensity = 'low' | 'medium' | 'high';
 
 type PluginMessage =
   | { type: 'fit' }
   | { type: 'fitWidth' }
   | { type: 'fitHeight' }
   | { type: 'close' }
-  | { type: 'lineHeightPreset'; preset: LineHeightPreset };
+  | { type: 'lineHeightPreset'; preset: LineHeightPreset }
+  | { type: 'applyWwdcGlow'; preset: GlowPreset; intensity: GlowIntensity };
 
 const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
   'auto',
@@ -57,9 +60,19 @@ const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
   '1.8',
   '2.0',
 ];
+const GLOW_PRESETS: GlowPreset[] = ['softWhite', 'spectrum'];
+const GLOW_INTENSITIES: GlowIntensity[] = ['low', 'medium', 'high'];
 
 function isLineHeightPreset(value: unknown): value is LineHeightPreset {
   return typeof value === 'string' && LINE_HEIGHT_PRESETS.includes(value as LineHeightPreset);
+}
+
+function isGlowPreset(value: unknown): value is GlowPreset {
+  return typeof value === 'string' && GLOW_PRESETS.includes(value as GlowPreset);
+}
+
+function isGlowIntensity(value: unknown): value is GlowIntensity {
+  return typeof value === 'string' && GLOW_INTENSITIES.includes(value as GlowIntensity);
 }
 
 /**
@@ -422,6 +435,190 @@ async function applyLineHeightPreset(preset: LineHeightPreset) {
   figma.notify(msg);
 }
 
+type GlowSupportedNode = TextNode | VectorNode | RectangleNode | EllipseNode | PolygonNode | StarNode | LineNode | BooleanOperationNode;
+
+function isGlowSupportedNode(node: SceneNode): node is GlowSupportedNode {
+  return (
+    node.type === 'TEXT' ||
+    node.type === 'VECTOR' ||
+    node.type === 'RECTANGLE' ||
+    node.type === 'ELLIPSE' ||
+    node.type === 'POLYGON' ||
+    node.type === 'STAR' ||
+    node.type === 'LINE' ||
+    node.type === 'BOOLEAN_OPERATION'
+  );
+}
+
+function cloneNode<T extends SceneNode>(node: T): T | null {
+  const cloneFn = (node as unknown as { clone?: () => T }).clone;
+  if (typeof cloneFn !== 'function') return null;
+  try {
+    return cloneFn.call(node);
+  } catch {
+    return null;
+  }
+}
+
+function toPaintColor(rgb: { r: number; g: number; b: number }, opacity: number): SolidPaint {
+  return { type: 'SOLID', color: rgb, opacity };
+}
+
+function setSolidFill(node: SceneNode, rgb: { r: number; g: number; b: number }, opacity: number) {
+  const anyNode = node as unknown as { fills?: Paint[] };
+  if (!('fills' in anyNode)) return;
+  try {
+    anyNode.fills = [toPaintColor(rgb, opacity)];
+  } catch {
+    // ignore unsupported fill assignment
+  }
+}
+
+function setStroke(
+  node: SceneNode,
+  rgb: { r: number; g: number; b: number },
+  opacity: number,
+  weight: number
+) {
+  const anyNode = node as unknown as { strokes?: Paint[]; strokeWeight?: number };
+  if (!('strokes' in anyNode)) return;
+  try {
+    anyNode.strokes = [toPaintColor(rgb, opacity)];
+    if ('strokeWeight' in anyNode) {
+      anyNode.strokeWeight = weight;
+    }
+  } catch {
+    // ignore unsupported stroke assignment
+  }
+}
+
+function setGlowEffects(
+  node: SceneNode,
+  rgb: { r: number; g: number; b: number },
+  opacity: number,
+  radius: number
+) {
+  const anyNode = node as unknown as { effects?: Effect[] };
+  if (!('effects' in anyNode)) return;
+  try {
+    anyNode.effects = [
+      {
+        type: 'DROP_SHADOW',
+        color: { r: rgb.r, g: rgb.g, b: rgb.b, a: opacity },
+        offset: { x: 0, y: 0 },
+        radius,
+        spread: 0,
+        visible: true,
+        blendMode: 'SCREEN',
+      },
+    ];
+  } catch {
+    // ignore unsupported effects assignment
+  }
+}
+
+function applyWwdcGlowLayerStyle(
+  layerName: string,
+  node: SceneNode,
+  preset: GlowPreset,
+  intensity: GlowIntensity
+) {
+  const intensityScale = intensity === 'low' ? 0.75 : intensity === 'high' ? 1.35 : 1;
+  const coreColor = preset === 'spectrum' ? { r: 1, g: 0.98, b: 0.94 } : { r: 1, g: 0.99, b: 0.97 };
+  const outerColor = preset === 'spectrum' ? { r: 0.78, g: 0.82, b: 1 } : { r: 1, g: 1, b: 1 };
+  const fringeColor = { r: 0.6, g: 0.7, b: 1 };
+
+  if (layerName === 'Base') {
+    (node as BlendMixin).opacity = 0.92;
+    return;
+  }
+  if (layerName === 'Stroke Highlight') {
+    setStroke(node, { r: 1, g: 1, b: 1 }, 0.7, 1 * intensityScale);
+    (node as BlendMixin).opacity = 0.92;
+    return;
+  }
+  if (layerName === 'Glow Core') {
+    setSolidFill(node, coreColor, 0.4);
+    setGlowEffects(node, coreColor, 0.5, 8 * intensityScale);
+    (node as BlendMixin).opacity = 0.8;
+    return;
+  }
+  if (layerName === 'Glow Outer') {
+    setSolidFill(node, outerColor, 0.26);
+    setGlowEffects(node, outerColor, 0.35, 24 * intensityScale);
+    (node as BlendMixin).opacity = 0.6;
+    return;
+  }
+
+  setSolidFill(node, fringeColor, preset === 'spectrum' ? 0.22 : 0.14);
+  setGlowEffects(node, fringeColor, preset === 'spectrum' ? 0.24 : 0.18, 12 * intensityScale);
+  (node as BlendMixin).opacity = 0.45;
+}
+
+function applyWwdcGlow(preset: GlowPreset, intensity: GlowIntensity) {
+  const selection = figma.currentPage.selection;
+  if (!selection.length) {
+    figma.notify('请选择文本或支持的形状图层');
+    return;
+  }
+
+  let okCount = 0;
+  let skipUnsupportedCount = 0;
+  let skipNoParentCount = 0;
+  const createdGroups: SceneNode[] = [];
+
+  for (const node of selection) {
+    if (!isGlowSupportedNode(node)) {
+      skipUnsupportedCount++;
+      continue;
+    }
+    if (!node.parent || !('appendChild' in node.parent)) {
+      skipNoParentCount++;
+      continue;
+    }
+
+    const parent = node.parent as ChildrenMixin;
+    const layerSequence = ['Glow Outer', 'Chromatic Fringe', 'Glow Core', 'Stroke Highlight', 'Base'] as const;
+    const layers: SceneNode[] = [];
+
+    for (const layerName of layerSequence) {
+      const cloned = cloneNode(node);
+      if (!cloned) continue;
+      cloned.name = layerName;
+      applyWwdcGlowLayerStyle(layerName, cloned, preset, intensity);
+      parent.appendChild(cloned);
+      layers.push(cloned);
+    }
+
+    if (layers.length === 0) {
+      skipUnsupportedCount++;
+      continue;
+    }
+
+    const glowGroup = figma.group(layers, parent);
+    glowGroup.name = `WWDC Glow / ${node.name}`;
+    try {
+      glowGroup.x = node.x;
+      glowGroup.y = node.y;
+    } catch {
+      // ignore position errors
+    }
+
+    createdGroups.push(glowGroup);
+    okCount++;
+  }
+
+  if (createdGroups.length > 0) {
+    figma.currentPage.selection = createdGroups;
+    figma.viewport.scrollAndZoomIntoView(createdGroups);
+  }
+
+  let msg = `WWDC Glow 完成：成功 ${okCount} 个`;
+  if (skipUnsupportedCount) msg += `，跳过不支持 ${skipUnsupportedCount} 个`;
+  if (skipNoParentCount) msg += `，跳过无父级 ${skipNoParentCount} 个`;
+  figma.notify(msg);
+}
+
 // ------------------------------
 // 5) 接收 UI 面板消息
 // ------------------------------
@@ -443,6 +640,14 @@ figma.ui.onmessage = async (msg: PluginMessage | { type?: string; [key: string]:
     case 'lineHeightPreset':
       if (isLineHeightPreset((msg as PluginMessage).preset)) {
         await applyLineHeightPreset((msg as PluginMessage).preset);
+      }
+      return;
+    case 'applyWwdcGlow':
+      if (
+        isGlowPreset((msg as PluginMessage).preset) &&
+        isGlowIntensity((msg as PluginMessage).intensity)
+      ) {
+        applyWwdcGlow((msg as PluginMessage).preset, (msg as PluginMessage).intensity);
       }
       return;
     default:
