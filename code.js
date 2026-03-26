@@ -465,52 +465,156 @@ function setStroke(node, rgb, opacity, weight) {
   } catch (e) {}
 }
 
-function setGlowEffects(node, rgb, opacity, radius) {
+function setGlowEffects(node, shadows) {
   if (!node || !('effects' in node)) return;
   try {
-    node.effects = [{
-      type: 'DROP_SHADOW',
-      color: { r: rgb.r, g: rgb.g, b: rgb.b, a: opacity },
-      offset: { x: 0, y: 0 },
-      radius: radius,
-      spread: 0,
-      visible: true,
-      blendMode: 'SCREEN'
-    }];
+    node.effects = shadows.map(function (shadow) {
+      return {
+        type: 'DROP_SHADOW',
+        color: { r: shadow.rgb.r, g: shadow.rgb.g, b: shadow.rgb.b, a: shadow.opacity },
+        offset: { x: shadow.offsetX || 0, y: shadow.offsetY || 0 },
+        radius: shadow.radius,
+        spread: 0,
+        visible: true,
+        blendMode: 'SCREEN'
+      };
+    });
+  } catch (e) {}
+}
+
+function setNodeBlendMode(node, blendMode) {
+  if (!node || !('blendMode' in node)) return;
+  try {
+    node.blendMode = blendMode;
   } catch (e) {}
 }
 
 function applyWwdcGlowLayerStyle(layerName, node, preset, intensity) {
-  var intensityScale = intensity === 'low' ? 0.75 : intensity === 'high' ? 1.35 : 1;
-  var coreColor = preset === 'spectrum' ? { r: 1, g: 0.98, b: 0.94 } : { r: 1, g: 0.99, b: 0.97 };
-  var outerColor = preset === 'spectrum' ? { r: 0.78, g: 0.82, b: 1 } : { r: 1, g: 1, b: 1 };
-  var fringeColor = { r: 0.6, g: 0.7, b: 1 };
+  var tone = preset === 'spectrum' ? {
+    base: { r: 0.16, g: 0.17, b: 0.2 },
+    edge: { r: 0.97, g: 0.99, b: 1 },
+    core: { r: 0.9, g: 0.94, b: 1 },
+    outer: { r: 0.5, g: 0.61, b: 0.95 },
+    fringeCool: { r: 0.52, g: 0.66, b: 1 },
+    fringeWarm: { r: 1, g: 0.76, b: 0.62 }
+  } : {
+    base: { r: 0.18, g: 0.18, b: 0.19 },
+    edge: { r: 0.99, g: 0.99, b: 0.98 },
+    core: { r: 1, g: 0.96, b: 0.9 },
+    outer: { r: 0.79, g: 0.83, b: 0.92 },
+    fringeCool: { r: 0.62, g: 0.72, b: 0.95 },
+    fringeWarm: { r: 1, g: 0.84, b: 0.72 }
+  };
+
+  var intensityStyle = intensity === 'low' ? {
+    baseOpacity: 0.96,
+    edgeOpacity: 0.9,
+    edgeWeight: 1.15,
+    edgeHalo: 1.8,
+    coreFill: 0.42,
+    coreGlowOpacity: 0.46,
+    coreRadius: 5,
+    outerFill: 0.08,
+    outerGlowOpacity: 0.16,
+    outerRadius: 16,
+    fringeFill: 0.06,
+    fringeGlowOpacity: 0.12,
+    fringeRadius: 6,
+    fringeOffset: 0.5
+  } : intensity === 'high' ? {
+    baseOpacity: 0.9,
+    edgeOpacity: 0.86,
+    edgeWeight: 1.25,
+    edgeHalo: 2.5,
+    coreFill: 0.52,
+    coreGlowOpacity: 0.62,
+    coreRadius: 9,
+    outerFill: 0.14,
+    outerGlowOpacity: 0.26,
+    outerRadius: 34,
+    fringeFill: 0.12,
+    fringeGlowOpacity: 0.2,
+    fringeRadius: 11,
+    fringeOffset: 1.2
+  } : {
+    baseOpacity: 0.93,
+    edgeOpacity: 0.88,
+    edgeWeight: 1.2,
+    edgeHalo: 2.1,
+    coreFill: 0.48,
+    coreGlowOpacity: 0.54,
+    coreRadius: 7,
+    outerFill: 0.11,
+    outerGlowOpacity: 0.21,
+    outerRadius: 24,
+    fringeFill: 0.09,
+    fringeGlowOpacity: 0.16,
+    fringeRadius: 8,
+    fringeOffset: 0.8
+  };
 
   if (layerName === 'Base') {
-    node.opacity = 0.92;
+    setSolidFill(node, tone.base, 0.95);
+    setStroke(node, tone.base, 0.78, 0.75);
+    setGlowEffects(node, []);
+    setNodeBlendMode(node, 'NORMAL');
+    node.opacity = intensityStyle.baseOpacity;
     return;
   }
   if (layerName === 'Stroke Highlight') {
-    setStroke(node, { r: 1, g: 1, b: 1 }, 0.7, 1 * intensityScale);
-    node.opacity = 0.92;
+    setSolidFill(node, tone.edge, 0.08);
+    setStroke(node, tone.edge, intensityStyle.edgeOpacity, intensityStyle.edgeWeight);
+    setGlowEffects(node, [{
+      rgb: tone.edge,
+      opacity: Math.min(0.38, intensityStyle.edgeHalo * 0.14),
+      radius: intensityStyle.edgeHalo
+    }]);
+    setNodeBlendMode(node, 'SCREEN');
+    node.opacity = 0.98;
     return;
   }
   if (layerName === 'Glow Core') {
-    setSolidFill(node, coreColor, 0.4);
-    setGlowEffects(node, coreColor, 0.5, 8 * intensityScale);
-    node.opacity = 0.8;
+    setSolidFill(node, tone.core, intensityStyle.coreFill);
+    setStroke(node, tone.core, 0.18, 0.9);
+    setGlowEffects(node, [{
+      rgb: tone.core,
+      opacity: intensityStyle.coreGlowOpacity,
+      radius: intensityStyle.coreRadius
+    }]);
+    setNodeBlendMode(node, 'SCREEN');
+    node.opacity = 0.78;
     return;
   }
   if (layerName === 'Glow Outer') {
-    setSolidFill(node, outerColor, 0.26);
-    setGlowEffects(node, outerColor, 0.35, 24 * intensityScale);
-    node.opacity = 0.6;
+    setSolidFill(node, tone.outer, intensityStyle.outerFill);
+    setGlowEffects(node, [{
+      rgb: tone.outer,
+      opacity: intensityStyle.outerGlowOpacity,
+      radius: intensityStyle.outerRadius
+    }, {
+      rgb: tone.outer,
+      opacity: intensity === 'high' ? 0.1 : 0.07,
+      radius: intensityStyle.outerRadius * 1.35
+    }]);
+    setNodeBlendMode(node, 'SCREEN');
+    node.opacity = 0.58;
     return;
   }
 
-  setSolidFill(node, fringeColor, preset === 'spectrum' ? 0.22 : 0.14);
-  setGlowEffects(node, fringeColor, preset === 'spectrum' ? 0.24 : 0.18, 12 * intensityScale);
-  node.opacity = 0.45;
+  setSolidFill(node, tone.fringeCool, intensityStyle.fringeFill);
+  setGlowEffects(node, [{
+    rgb: tone.fringeCool,
+    opacity: intensityStyle.fringeGlowOpacity,
+    radius: intensityStyle.fringeRadius,
+    offsetX: -intensityStyle.fringeOffset
+  }, {
+    rgb: tone.fringeWarm,
+    opacity: intensity === 'low' ? 0.05 : intensity === 'high' ? 0.1 : 0.07,
+    radius: intensityStyle.fringeRadius * 0.9,
+    offsetX: intensityStyle.fringeOffset
+  }]);
+  setNodeBlendMode(node, 'SCREEN');
+  node.opacity = intensity === 'low' ? 0.38 : intensity === 'high' ? 0.55 : 0.46;
 }
 
 function applyWwdcGlow(preset, intensity) {
