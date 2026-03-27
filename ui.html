@@ -13,6 +13,7 @@
         font: 12px/1.4 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
         margin: 12px;
         color: rgba(0, 0, 0, 0.85);
+        padding-bottom: 10px;
       }
 
       .header {
@@ -170,6 +171,41 @@
       遇到混合字号/混合字体或无法明确判断语言的文本会自动跳过，并在提示里汇总数量
     </div>
 
+    <div class="section-header">
+      <div class="section-icon" aria-hidden="true">✦</div>
+      <div class="section-title">WWDC Glow</div>
+    </div>
+
+    <div class="row">
+      <select id="wwdcPreset">
+        <option value="softWhite">Soft White</option>
+        <option value="spectrum">Spectrum</option>
+      </select>
+      <select id="wwdcIntensity">
+        <option value="low">Low</option>
+        <option value="medium" selected>Medium</option>
+        <option value="high">High</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <select id="lightDirection">
+        <option value="leftToRight">Left → Right</option>
+        <option value="rightToLeft">Right → Left</option>
+        <option value="topToBottom">Top → Bottom</option>
+        <option value="bottomToTop">Bottom → Top</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button id="applyWwdcGlow" class="primary">Apply WWDC Glow</button>
+    </div>
+
+    <div class="hint">
+      选中文本或基础图形后应用：会生成可编辑分组（保留原始图层不改动），包含 Base / Stroke Highlight /
+      Glow Core / Glow Outer / Chromatic Fringe 五层结构。
+    </div>
+
     <script>
       /**
        * UI -> 插件（code.js）通信方式：
@@ -189,6 +225,13 @@
         const preset = event.target.value;
         if (!preset) return;
         send('lineHeightPreset', { preset });
+      };
+
+      document.getElementById('applyWwdcGlow').onclick = () => {
+        const preset = document.getElementById('wwdcPreset').value;
+        const intensity = document.getElementById('wwdcIntensity').value;
+        const direction = document.getElementById('lightDirection').value;
+        send('applyWwdcGlow', { preset, intensity, direction });
       };
 
       window.addEventListener('keydown', (e) => {

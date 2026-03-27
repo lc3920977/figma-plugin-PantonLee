@@ -17,7 +17,7 @@
 // ------------------------------
 // __html__ 是打包工具（或模板）把 ui.html 内联到代码中的变量。
 // showUI 的第二个参数可以控制面板大小。
-figma.showUI(__html__, { width: 360, height: 400 });
+figma.showUI(__html__, { width: 360, height: 560 });
 
 // ------------------------------
 // 2) 类型与工具函数
@@ -36,13 +36,17 @@ type LineHeightPreset =
   | '1.6'
   | '1.8'
   | '2.0';
+type GlowPreset = 'softWhite' | 'spectrum';
+type GlowIntensity = 'low' | 'medium' | 'high';
+type LightDirection = 'leftToRight' | 'rightToLeft' | 'topToBottom' | 'bottomToTop';
 
 type PluginMessage =
   | { type: 'fit' }
   | { type: 'fitWidth' }
   | { type: 'fitHeight' }
   | { type: 'close' }
-  | { type: 'lineHeightPreset'; preset: LineHeightPreset };
+  | { type: 'lineHeightPreset'; preset: LineHeightPreset }
+  | { type: 'applyWwdcGlow'; preset: GlowPreset; intensity: GlowIntensity; direction: LightDirection };
 
 const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
   'auto',
@@ -57,9 +61,29 @@ const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
   '1.8',
   '2.0',
 ];
+const GLOW_PRESETS: GlowPreset[] = ['softWhite', 'spectrum'];
+const GLOW_INTENSITIES: GlowIntensity[] = ['low', 'medium', 'high'];
+const LIGHT_DIRECTIONS: LightDirection[] = [
+  'leftToRight',
+  'rightToLeft',
+  'topToBottom',
+  'bottomToTop',
+];
 
 function isLineHeightPreset(value: unknown): value is LineHeightPreset {
   return typeof value === 'string' && LINE_HEIGHT_PRESETS.includes(value as LineHeightPreset);
+}
+
+function isGlowPreset(value: unknown): value is GlowPreset {
+  return typeof value === 'string' && GLOW_PRESETS.includes(value as GlowPreset);
+}
+
+function isGlowIntensity(value: unknown): value is GlowIntensity {
+  return typeof value === 'string' && GLOW_INTENSITIES.includes(value as GlowIntensity);
+}
+
+function isLightDirection(value: unknown): value is LightDirection {
+  return typeof value === 'string' && LIGHT_DIRECTIONS.includes(value as LightDirection);
 }
 
 /**
@@ -422,6 +446,406 @@ async function applyLineHeightPreset(preset: LineHeightPreset) {
   figma.notify(msg);
 }
 
+type GlowSupportedNode = TextNode | VectorNode | RectangleNode | EllipseNode | PolygonNode | StarNode | LineNode | BooleanOperationNode;
+
+function isGlowSupportedNode(node: SceneNode): node is GlowSupportedNode {
+  return (
+    node.type === 'TEXT' ||
+    node.type === 'VECTOR' ||
+    node.type === 'RECTANGLE' ||
+    node.type === 'ELLIPSE' ||
+    node.type === 'POLYGON' ||
+    node.type === 'STAR' ||
+    node.type === 'LINE' ||
+    node.type === 'BOOLEAN_OPERATION'
+  );
+}
+
+function cloneNode<T extends SceneNode>(node: T): T | null {
+  const cloneFn = (node as unknown as { clone?: () => T }).clone;
+  if (typeof cloneFn !== 'function') return null;
+  try {
+    return cloneFn.call(node);
+  } catch {
+    return null;
+  }
+}
+
+function toPaintColor(rgb: { r: number; g: number; b: number }, opacity: number): SolidPaint {
+  return { type: 'SOLID', color: rgb, opacity };
+}
+
+function setSolidFill(node: SceneNode, rgb: { r: number; g: number; b: number }, opacity: number) {
+  const anyNode = node as unknown as { fills?: Paint[] };
+  if (!('fills' in anyNode)) return;
+  try {
+    anyNode.fills = [toPaintColor(rgb, opacity)];
+  } catch {
+    // ignore unsupported fill assignment
+  }
+}
+
+function setLinearGradientFill(
+  node: SceneNode,
+  stops: Array<{ position: number; color: RGBA }>,
+  direction: LightDirection
+) {
+  const anyNode = node as unknown as { fills?: Paint[] };
+  if (!('fills' in anyNode)) return;
+  try {
+    anyNode.fills = [
+      {
+        type: 'GRADIENT_LINEAR',
+        gradientStops: stops,
+        gradientTransform: getGradientTransformByDirection(direction),
+      },
+    ];
+  } catch {
+    // ignore unsupported gradient assignment
+  }
+}
+
+function getGradientTransformByDirection(direction: LightDirection): Transform {
+  if (direction === 'leftToRight') return [[1, 0, 0], [0, 0.5, 0.5]];
+  if (direction === 'rightToLeft') return [[-1, 0, 1], [0, 0.5, 0.5]];
+  if (direction === 'topToBottom') return [[0, 1, 0.5], [0.5, 0, 0]];
+  return [[0, -1, 0.5], [0.5, 0, 1]];
+}
+
+function getDirectionVector(direction: LightDirection): { x: number; y: number } {
+  if (direction === 'leftToRight') return { x: 1, y: 0 };
+  if (direction === 'rightToLeft') return { x: -1, y: 0 };
+  if (direction === 'topToBottom') return { x: 0, y: 1 };
+  return { x: 0, y: -1 };
+}
+
+function setStroke(
+  node: SceneNode,
+  rgb: { r: number; g: number; b: number },
+  opacity: number,
+  weight: number
+) {
+  const anyNode = node as unknown as { strokes?: Paint[]; strokeWeight?: number };
+  if (!('strokes' in anyNode)) return;
+  try {
+    anyNode.strokes = [toPaintColor(rgb, opacity)];
+    if ('strokeWeight' in anyNode) {
+      anyNode.strokeWeight = weight;
+    }
+  } catch {
+    // ignore unsupported stroke assignment
+  }
+}
+
+function setGlowEffects(
+  node: SceneNode,
+  shadows: Array<{
+    rgb: { r: number; g: number; b: number };
+    opacity: number;
+    radius: number;
+    offsetX?: number;
+    offsetY?: number;
+  }>
+) {
+  const anyNode = node as unknown as { effects?: Effect[] };
+  if (!('effects' in anyNode)) return;
+  try {
+    anyNode.effects = shadows.map((shadow) => ({
+      type: 'DROP_SHADOW',
+      color: { r: shadow.rgb.r, g: shadow.rgb.g, b: shadow.rgb.b, a: shadow.opacity },
+      offset: { x: shadow.offsetX ?? 0, y: shadow.offsetY ?? 0 },
+      radius: shadow.radius,
+      spread: 0,
+      visible: true,
+      blendMode: 'SCREEN',
+    }));
+  } catch {
+    // ignore unsupported effects assignment
+  }
+}
+
+function setNodeBlendMode(node: SceneNode, blendMode: BlendMode) {
+  const anyNode = node as unknown as { blendMode?: BlendMode };
+  if (!('blendMode' in anyNode)) return;
+  try {
+    anyNode.blendMode = blendMode;
+  } catch {
+    // ignore unsupported blend mode
+  }
+}
+
+function applyWwdcGlowLayerStyle(
+  layerName: string,
+  node: SceneNode,
+  preset: GlowPreset,
+  intensity: GlowIntensity,
+  direction: LightDirection
+) {
+  const lightVec = getDirectionVector(direction);
+  const litOffset = 1;
+  const reflectedOffset = -0.85;
+  const litX = lightVec.x * litOffset;
+  const litY = lightVec.y * litOffset;
+  const reflectedX = lightVec.x * reflectedOffset;
+  const reflectedY = lightVec.y * reflectedOffset;
+  const tone =
+    preset === 'spectrum'
+      ? {
+          base: { r: 0.16, g: 0.17, b: 0.2 },
+          edge: { r: 0.97, g: 0.99, b: 1 },
+          core: { r: 0.9, g: 0.94, b: 1 },
+          outer: { r: 0.5, g: 0.61, b: 0.95 },
+          fringeCool: { r: 0.52, g: 0.66, b: 1 },
+          fringeWarm: { r: 1, g: 0.76, b: 0.62 },
+        }
+      : {
+          base: { r: 0.18, g: 0.18, b: 0.19 },
+          edge: { r: 0.99, g: 0.99, b: 0.98 },
+          core: { r: 1, g: 0.96, b: 0.9 },
+          outer: { r: 0.79, g: 0.83, b: 0.92 },
+          fringeCool: { r: 0.62, g: 0.72, b: 0.95 },
+          fringeWarm: { r: 1, g: 0.84, b: 0.72 },
+        };
+
+  const intensityStyle =
+    intensity === 'low'
+      ? {
+          baseOpacity: 0.96,
+          edgeOpacity: 0.9,
+          edgeWeight: 1.15,
+          edgeHalo: 1.8,
+          coreFill: 0.42,
+          coreGlowOpacity: 0.46,
+          coreRadius: 5,
+          outerFill: 0.08,
+          outerGlowOpacity: 0.16,
+          outerRadius: 16,
+          fringeFill: 0.06,
+          fringeGlowOpacity: 0.12,
+          fringeRadius: 6,
+          fringeOffset: 0.5,
+        }
+      : intensity === 'high'
+      ? {
+          baseOpacity: 0.9,
+          edgeOpacity: 0.86,
+          edgeWeight: 1.25,
+          edgeHalo: 2.5,
+          coreFill: 0.52,
+          coreGlowOpacity: 0.62,
+          coreRadius: 9,
+          outerFill: 0.14,
+          outerGlowOpacity: 0.26,
+          outerRadius: 34,
+          fringeFill: 0.12,
+          fringeGlowOpacity: 0.2,
+          fringeRadius: 11,
+          fringeOffset: 1.2,
+        }
+      : {
+          baseOpacity: 0.93,
+          edgeOpacity: 0.88,
+          edgeWeight: 1.2,
+          edgeHalo: 2.1,
+          coreFill: 0.48,
+          coreGlowOpacity: 0.54,
+          coreRadius: 7,
+          outerFill: 0.11,
+          outerGlowOpacity: 0.21,
+          outerRadius: 24,
+          fringeFill: 0.09,
+          fringeGlowOpacity: 0.16,
+          fringeRadius: 8,
+          fringeOffset: 0.8,
+        };
+
+  if (layerName === 'Base') {
+    setLinearGradientFill(node, [
+      { position: 0, color: { ...tone.base, a: 0.98 } },
+      {
+        position: 0.56,
+        color: {
+          r: tone.base.r + 0.06,
+          g: tone.base.g + 0.06,
+          b: tone.base.b + 0.065,
+          a: 0.95,
+        },
+      },
+      {
+        position: 1,
+        color: {
+          r: Math.min(1, tone.base.r + 0.16),
+          g: Math.min(1, tone.base.g + 0.16),
+          b: Math.min(1, tone.base.b + 0.17),
+          a: 0.9,
+        },
+      },
+    ], direction);
+    setStroke(node, tone.base, 0.62, 0.75);
+    setGlowEffects(node, []);
+    setNodeBlendMode(node, 'NORMAL');
+    (node as BlendMixin).opacity = intensityStyle.baseOpacity;
+    return;
+  }
+  if (layerName === 'Stroke Highlight') {
+    setLinearGradientFill(node, [
+      { position: 0, color: { ...tone.edge, a: 0.13 } },
+      { position: 0.4, color: { ...tone.edge, a: 0.05 } },
+      { position: 1, color: { ...tone.edge, a: 0.02 } },
+    ], direction);
+    setStroke(node, tone.edge, intensityStyle.edgeOpacity, intensityStyle.edgeWeight);
+    setGlowEffects(node, [
+      {
+        rgb: tone.edge,
+        opacity: Math.min(0.45, intensityStyle.edgeHalo * 0.17),
+        radius: intensityStyle.edgeHalo * 0.92,
+        offsetX: litX,
+        offsetY: litY,
+      },
+      {
+        rgb: tone.outer,
+        opacity: intensity === 'low' ? 0.08 : intensity === 'high' ? 0.14 : 0.11,
+        radius: intensityStyle.edgeHalo * 0.95,
+        offsetX: reflectedX,
+        offsetY: reflectedY,
+      },
+    ]);
+    setNodeBlendMode(node, 'SCREEN');
+    (node as BlendMixin).opacity = 0.98;
+    return;
+  }
+  if (layerName === 'Glow Core') {
+    setSolidFill(node, tone.core, intensityStyle.coreFill);
+    setStroke(node, tone.core, 0.18, 0.9);
+    setGlowEffects(node, [
+      {
+        rgb: tone.core,
+        opacity: intensityStyle.coreGlowOpacity,
+        radius: intensityStyle.coreRadius,
+        offsetX: lightVec.x * 0.9,
+        offsetY: lightVec.y * 0.9,
+      },
+      {
+        rgb: tone.fringeWarm,
+        opacity: intensity === 'low' ? 0.1 : intensity === 'high' ? 0.18 : 0.14,
+        radius: intensityStyle.coreRadius * 0.65,
+        offsetX: lightVec.x * 0.45,
+        offsetY: lightVec.y * 0.45,
+      },
+    ]);
+    setNodeBlendMode(node, 'SCREEN');
+    (node as BlendMixin).opacity = 0.78;
+    return;
+  }
+  if (layerName === 'Glow Outer') {
+    setSolidFill(node, tone.outer, intensityStyle.outerFill);
+    setGlowEffects(node, [
+      { rgb: tone.outer, opacity: intensityStyle.outerGlowOpacity, radius: intensityStyle.outerRadius },
+      {
+        rgb: tone.outer,
+        opacity: intensity === 'high' ? 0.1 : 0.07,
+        radius: intensityStyle.outerRadius * 1.35,
+        offsetX: lightVec.x * 1.25,
+        offsetY: lightVec.y * 1.25,
+      },
+      {
+        rgb: tone.fringeCool,
+        opacity: intensity === 'low' ? 0.09 : intensity === 'high' ? 0.16 : 0.12,
+        radius: intensityStyle.outerRadius * 0.72,
+        offsetX: reflectedX * 1.9,
+        offsetY: reflectedY * 1.9,
+      },
+    ]);
+    setNodeBlendMode(node, 'SCREEN');
+    (node as BlendMixin).opacity = 0.58;
+    return;
+  }
+
+  setSolidFill(node, tone.fringeCool, intensityStyle.fringeFill);
+  setGlowEffects(node, [
+    {
+      rgb: tone.fringeCool,
+      opacity: intensityStyle.fringeGlowOpacity,
+      radius: intensityStyle.fringeRadius,
+      offsetX: reflectedX * intensityStyle.fringeOffset * 1.5,
+      offsetY: reflectedY * intensityStyle.fringeOffset * 1.5,
+    },
+    {
+      rgb: tone.fringeWarm,
+      opacity: intensity === 'low' ? 0.05 : intensity === 'high' ? 0.1 : 0.07,
+      radius: intensityStyle.fringeRadius * 0.9,
+      offsetX: litX * intensityStyle.fringeOffset * 0.95,
+      offsetY: litY * intensityStyle.fringeOffset * 0.95,
+    },
+  ]);
+  setNodeBlendMode(node, 'SCREEN');
+  (node as BlendMixin).opacity = intensity === 'low' ? 0.38 : intensity === 'high' ? 0.55 : 0.46;
+}
+
+function applyWwdcGlow(preset: GlowPreset, intensity: GlowIntensity, direction: LightDirection) {
+  const selection = figma.currentPage.selection;
+  if (!selection.length) {
+    figma.notify('请选择文本或支持的形状图层');
+    return;
+  }
+
+  let okCount = 0;
+  let skipUnsupportedCount = 0;
+  let skipNoParentCount = 0;
+  const createdGroups: SceneNode[] = [];
+
+  for (const node of selection) {
+    if (!isGlowSupportedNode(node)) {
+      skipUnsupportedCount++;
+      continue;
+    }
+    if (!node.parent || !('appendChild' in node.parent)) {
+      skipNoParentCount++;
+      continue;
+    }
+
+    const parent = node.parent as ChildrenMixin;
+    const layerSequence = ['Glow Outer', 'Chromatic Fringe', 'Glow Core', 'Stroke Highlight', 'Base'] as const;
+    const layers: SceneNode[] = [];
+
+    for (const layerName of layerSequence) {
+      const cloned = cloneNode(node);
+      if (!cloned) continue;
+      cloned.name = layerName;
+      applyWwdcGlowLayerStyle(layerName, cloned, preset, intensity, direction);
+      parent.appendChild(cloned);
+      layers.push(cloned);
+    }
+
+    if (layers.length === 0) {
+      skipUnsupportedCount++;
+      continue;
+    }
+
+    const glowGroup = figma.group(layers, parent);
+    glowGroup.name = `WWDC Glow / ${node.name}`;
+    try {
+      glowGroup.x = node.x;
+      glowGroup.y = node.y;
+    } catch {
+      // ignore position errors
+    }
+
+    createdGroups.push(glowGroup);
+    okCount++;
+  }
+
+  if (createdGroups.length > 0) {
+    figma.currentPage.selection = createdGroups;
+    figma.viewport.scrollAndZoomIntoView(createdGroups);
+  }
+
+  let msg = `WWDC Glow 完成：成功 ${okCount} 个`;
+  if (skipUnsupportedCount) msg += `，跳过不支持 ${skipUnsupportedCount} 个`;
+  if (skipNoParentCount) msg += `，跳过无父级 ${skipNoParentCount} 个`;
+  figma.notify(msg);
+}
+
 // ------------------------------
 // 5) 接收 UI 面板消息
 // ------------------------------
@@ -443,6 +867,19 @@ figma.ui.onmessage = async (msg: PluginMessage | { type?: string; [key: string]:
     case 'lineHeightPreset':
       if (isLineHeightPreset((msg as PluginMessage).preset)) {
         await applyLineHeightPreset((msg as PluginMessage).preset);
+      }
+      return;
+    case 'applyWwdcGlow':
+      if (
+        isGlowPreset((msg as PluginMessage).preset) &&
+        isGlowIntensity((msg as PluginMessage).intensity) &&
+        isLightDirection((msg as PluginMessage).direction)
+      ) {
+        applyWwdcGlow(
+          (msg as PluginMessage).preset,
+          (msg as PluginMessage).intensity,
+          (msg as PluginMessage).direction
+        );
       }
       return;
     default:
