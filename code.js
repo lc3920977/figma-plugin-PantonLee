@@ -455,6 +455,20 @@ function setSolidFill(node, rgb, opacity) {
   } catch (e) {}
 }
 
+function setLinearGradientFill(node, stops) {
+  if (!node || !('fills' in node)) return;
+  try {
+    node.fills = [{
+      type: 'GRADIENT_LINEAR',
+      gradientStops: stops,
+      gradientTransform: [
+        [0.7071, 0.7071, -0.2071],
+        [-0.7071, 0.7071, 0.5]
+      ]
+    }];
+  } catch (e) {}
+}
+
 function setStroke(node, rgb, opacity, weight) {
   if (!node || !('strokes' in node)) return;
   try {
@@ -554,20 +568,52 @@ function applyWwdcGlowLayerStyle(layerName, node, preset, intensity) {
   };
 
   if (layerName === 'Base') {
-    setSolidFill(node, tone.base, 0.95);
-    setStroke(node, tone.base, 0.78, 0.75);
+    setLinearGradientFill(node, [
+      { position: 0, color: Object.assign({}, tone.base, { a: 0.98 }) },
+      {
+        position: 0.56,
+        color: {
+          r: tone.base.r + 0.06,
+          g: tone.base.g + 0.06,
+          b: tone.base.b + 0.065,
+          a: 0.95
+        }
+      },
+      {
+        position: 1,
+        color: {
+          r: Math.min(1, tone.base.r + 0.16),
+          g: Math.min(1, tone.base.g + 0.16),
+          b: Math.min(1, tone.base.b + 0.17),
+          a: 0.9
+        }
+      }
+    ]);
+    setStroke(node, tone.base, 0.62, 0.75);
     setGlowEffects(node, []);
     setNodeBlendMode(node, 'NORMAL');
     node.opacity = intensityStyle.baseOpacity;
     return;
   }
   if (layerName === 'Stroke Highlight') {
-    setSolidFill(node, tone.edge, 0.08);
+    setLinearGradientFill(node, [
+      { position: 0, color: Object.assign({}, tone.edge, { a: 0.13 }) },
+      { position: 0.4, color: Object.assign({}, tone.edge, { a: 0.05 }) },
+      { position: 1, color: Object.assign({}, tone.edge, { a: 0.02 }) }
+    ]);
     setStroke(node, tone.edge, intensityStyle.edgeOpacity, intensityStyle.edgeWeight);
     setGlowEffects(node, [{
       rgb: tone.edge,
-      opacity: Math.min(0.38, intensityStyle.edgeHalo * 0.14),
-      radius: intensityStyle.edgeHalo
+      opacity: Math.min(0.45, intensityStyle.edgeHalo * 0.17),
+      radius: intensityStyle.edgeHalo * 0.92,
+      offsetX: -0.9,
+      offsetY: -0.9
+    }, {
+      rgb: tone.outer,
+      opacity: intensity === 'low' ? 0.08 : intensity === 'high' ? 0.14 : 0.11,
+      radius: intensityStyle.edgeHalo * 0.95,
+      offsetX: 0.8,
+      offsetY: 0.8
     }]);
     setNodeBlendMode(node, 'SCREEN');
     node.opacity = 0.98;
@@ -579,7 +625,15 @@ function applyWwdcGlowLayerStyle(layerName, node, preset, intensity) {
     setGlowEffects(node, [{
       rgb: tone.core,
       opacity: intensityStyle.coreGlowOpacity,
-      radius: intensityStyle.coreRadius
+      radius: intensityStyle.coreRadius,
+      offsetX: -0.8,
+      offsetY: -0.8
+    }, {
+      rgb: tone.fringeWarm,
+      opacity: intensity === 'low' ? 0.1 : intensity === 'high' ? 0.18 : 0.14,
+      radius: intensityStyle.coreRadius * 0.65,
+      offsetX: -0.4,
+      offsetY: -0.4
     }]);
     setNodeBlendMode(node, 'SCREEN');
     node.opacity = 0.78;
@@ -594,7 +648,15 @@ function applyWwdcGlowLayerStyle(layerName, node, preset, intensity) {
     }, {
       rgb: tone.outer,
       opacity: intensity === 'high' ? 0.1 : 0.07,
-      radius: intensityStyle.outerRadius * 1.35
+      radius: intensityStyle.outerRadius * 1.35,
+      offsetX: 1.2,
+      offsetY: 1.2
+    }, {
+      rgb: tone.fringeCool,
+      opacity: intensity === 'low' ? 0.09 : intensity === 'high' ? 0.16 : 0.12,
+      radius: intensityStyle.outerRadius * 0.72,
+      offsetX: 1.6,
+      offsetY: 1.6
     }]);
     setNodeBlendMode(node, 'SCREEN');
     node.opacity = 0.58;
@@ -606,12 +668,14 @@ function applyWwdcGlowLayerStyle(layerName, node, preset, intensity) {
     rgb: tone.fringeCool,
     opacity: intensityStyle.fringeGlowOpacity,
     radius: intensityStyle.fringeRadius,
-    offsetX: -intensityStyle.fringeOffset
+    offsetX: intensityStyle.fringeOffset,
+    offsetY: intensityStyle.fringeOffset * 0.8
   }, {
     rgb: tone.fringeWarm,
     opacity: intensity === 'low' ? 0.05 : intensity === 'high' ? 0.1 : 0.07,
     radius: intensityStyle.fringeRadius * 0.9,
-    offsetX: intensityStyle.fringeOffset
+    offsetX: -intensityStyle.fringeOffset * 0.85,
+    offsetY: -intensityStyle.fringeOffset * 0.6
   }]);
   setNodeBlendMode(node, 'SCREEN');
   node.opacity = intensity === 'low' ? 0.38 : intensity === 'high' ? 0.55 : 0.46;
