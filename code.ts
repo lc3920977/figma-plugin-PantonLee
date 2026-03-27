@@ -38,6 +38,7 @@ type LineHeightPreset =
   | '2.0';
 type GlowPreset = 'softWhite' | 'spectrum';
 type GlowIntensity = 'low' | 'medium' | 'high';
+type LightDirection = 'leftToRight' | 'rightToLeft' | 'topToBottom' | 'bottomToTop';
 
 type PluginMessage =
   | { type: 'fit' }
@@ -45,7 +46,7 @@ type PluginMessage =
   | { type: 'fitHeight' }
   | { type: 'close' }
   | { type: 'lineHeightPreset'; preset: LineHeightPreset }
-  | { type: 'applyWwdcGlow'; preset: GlowPreset; intensity: GlowIntensity };
+  | { type: 'applyWwdcGlow'; preset: GlowPreset; intensity: GlowIntensity; direction: LightDirection };
 
 const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
   'auto',
@@ -62,6 +63,12 @@ const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
 ];
 const GLOW_PRESETS: GlowPreset[] = ['softWhite', 'spectrum'];
 const GLOW_INTENSITIES: GlowIntensity[] = ['low', 'medium', 'high'];
+const LIGHT_DIRECTIONS: LightDirection[] = [
+  'leftToRight',
+  'rightToLeft',
+  'topToBottom',
+  'bottomToTop',
+];
 
 function isLineHeightPreset(value: unknown): value is LineHeightPreset {
   return typeof value === 'string' && LINE_HEIGHT_PRESETS.includes(value as LineHeightPreset);
@@ -73,6 +80,10 @@ function isGlowPreset(value: unknown): value is GlowPreset {
 
 function isGlowIntensity(value: unknown): value is GlowIntensity {
   return typeof value === 'string' && GLOW_INTENSITIES.includes(value as GlowIntensity);
+}
+
+function isLightDirection(value: unknown): value is LightDirection {
+  return typeof value === 'string' && LIGHT_DIRECTIONS.includes(value as LightDirection);
 }
 
 /**
@@ -476,7 +487,8 @@ function setSolidFill(node: SceneNode, rgb: { r: number; g: number; b: number },
 
 function setLinearGradientFill(
   node: SceneNode,
-  stops: Array<{ position: number; color: RGBA }>
+  stops: Array<{ position: number; color: RGBA }>,
+  direction: LightDirection
 ) {
   const anyNode = node as unknown as { fills?: Paint[] };
   if (!('fills' in anyNode)) return;
@@ -485,15 +497,26 @@ function setLinearGradientFill(
       {
         type: 'GRADIENT_LINEAR',
         gradientStops: stops,
-        gradientTransform: [
-          [0.7071, 0.7071, -0.2071],
-          [-0.7071, 0.7071, 0.5],
-        ],
+        gradientTransform: getGradientTransformByDirection(direction),
       },
     ];
   } catch {
     // ignore unsupported gradient assignment
   }
+}
+
+function getGradientTransformByDirection(direction: LightDirection): Transform {
+  if (direction === 'leftToRight') return [[1, 0, 0], [0, 0.5, 0.5]];
+  if (direction === 'rightToLeft') return [[-1, 0, 1], [0, 0.5, 0.5]];
+  if (direction === 'topToBottom') return [[0, 1, 0.5], [0.5, 0, 0]];
+  return [[0, -1, 0.5], [0.5, 0, 1]];
+}
+
+function getDirectionVector(direction: LightDirection): { x: number; y: number } {
+  if (direction === 'leftToRight') return { x: 1, y: 0 };
+  if (direction === 'rightToLeft') return { x: -1, y: 0 };
+  if (direction === 'topToBottom') return { x: 0, y: 1 };
+  return { x: 0, y: -1 };
 }
 
 function setStroke(
@@ -555,8 +578,16 @@ function applyWwdcGlowLayerStyle(
   layerName: string,
   node: SceneNode,
   preset: GlowPreset,
-  intensity: GlowIntensity
+  intensity: GlowIntensity,
+  direction: LightDirection
 ) {
+  const lightVec = getDirectionVector(direction);
+  const litOffset = 1;
+  const reflectedOffset = -0.85;
+  const litX = lightVec.x * litOffset;
+  const litY = lightVec.y * litOffset;
+  const reflectedX = lightVec.x * reflectedOffset;
+  const reflectedY = lightVec.y * reflectedOffset;
   const tone =
     preset === 'spectrum'
       ? {
@@ -649,7 +680,7 @@ function applyWwdcGlowLayerStyle(
           a: 0.9,
         },
       },
-    ]);
+    ], direction);
     setStroke(node, tone.base, 0.62, 0.75);
     setGlowEffects(node, []);
     setNodeBlendMode(node, 'NORMAL');
@@ -661,22 +692,22 @@ function applyWwdcGlowLayerStyle(
       { position: 0, color: { ...tone.edge, a: 0.13 } },
       { position: 0.4, color: { ...tone.edge, a: 0.05 } },
       { position: 1, color: { ...tone.edge, a: 0.02 } },
-    ]);
+    ], direction);
     setStroke(node, tone.edge, intensityStyle.edgeOpacity, intensityStyle.edgeWeight);
     setGlowEffects(node, [
       {
         rgb: tone.edge,
         opacity: Math.min(0.45, intensityStyle.edgeHalo * 0.17),
         radius: intensityStyle.edgeHalo * 0.92,
-        offsetX: -0.9,
-        offsetY: -0.9,
+        offsetX: litX,
+        offsetY: litY,
       },
       {
         rgb: tone.outer,
         opacity: intensity === 'low' ? 0.08 : intensity === 'high' ? 0.14 : 0.11,
         radius: intensityStyle.edgeHalo * 0.95,
-        offsetX: 0.8,
-        offsetY: 0.8,
+        offsetX: reflectedX,
+        offsetY: reflectedY,
       },
     ]);
     setNodeBlendMode(node, 'SCREEN');
@@ -691,15 +722,15 @@ function applyWwdcGlowLayerStyle(
         rgb: tone.core,
         opacity: intensityStyle.coreGlowOpacity,
         radius: intensityStyle.coreRadius,
-        offsetX: -0.8,
-        offsetY: -0.8,
+        offsetX: lightVec.x * 0.9,
+        offsetY: lightVec.y * 0.9,
       },
       {
         rgb: tone.fringeWarm,
         opacity: intensity === 'low' ? 0.1 : intensity === 'high' ? 0.18 : 0.14,
         radius: intensityStyle.coreRadius * 0.65,
-        offsetX: -0.4,
-        offsetY: -0.4,
+        offsetX: lightVec.x * 0.45,
+        offsetY: lightVec.y * 0.45,
       },
     ]);
     setNodeBlendMode(node, 'SCREEN');
@@ -714,15 +745,15 @@ function applyWwdcGlowLayerStyle(
         rgb: tone.outer,
         opacity: intensity === 'high' ? 0.1 : 0.07,
         radius: intensityStyle.outerRadius * 1.35,
-        offsetX: 1.2,
-        offsetY: 1.2,
+        offsetX: lightVec.x * 1.25,
+        offsetY: lightVec.y * 1.25,
       },
       {
         rgb: tone.fringeCool,
         opacity: intensity === 'low' ? 0.09 : intensity === 'high' ? 0.16 : 0.12,
         radius: intensityStyle.outerRadius * 0.72,
-        offsetX: 1.6,
-        offsetY: 1.6,
+        offsetX: reflectedX * 1.9,
+        offsetY: reflectedY * 1.9,
       },
     ]);
     setNodeBlendMode(node, 'SCREEN');
@@ -736,22 +767,22 @@ function applyWwdcGlowLayerStyle(
       rgb: tone.fringeCool,
       opacity: intensityStyle.fringeGlowOpacity,
       radius: intensityStyle.fringeRadius,
-      offsetX: intensityStyle.fringeOffset,
-      offsetY: intensityStyle.fringeOffset * 0.8,
+      offsetX: reflectedX * intensityStyle.fringeOffset * 1.5,
+      offsetY: reflectedY * intensityStyle.fringeOffset * 1.5,
     },
     {
       rgb: tone.fringeWarm,
       opacity: intensity === 'low' ? 0.05 : intensity === 'high' ? 0.1 : 0.07,
       radius: intensityStyle.fringeRadius * 0.9,
-      offsetX: -intensityStyle.fringeOffset * 0.85,
-      offsetY: -intensityStyle.fringeOffset * 0.6,
+      offsetX: litX * intensityStyle.fringeOffset * 0.95,
+      offsetY: litY * intensityStyle.fringeOffset * 0.95,
     },
   ]);
   setNodeBlendMode(node, 'SCREEN');
   (node as BlendMixin).opacity = intensity === 'low' ? 0.38 : intensity === 'high' ? 0.55 : 0.46;
 }
 
-function applyWwdcGlow(preset: GlowPreset, intensity: GlowIntensity) {
+function applyWwdcGlow(preset: GlowPreset, intensity: GlowIntensity, direction: LightDirection) {
   const selection = figma.currentPage.selection;
   if (!selection.length) {
     figma.notify('请选择文本或支持的形状图层');
@@ -781,7 +812,7 @@ function applyWwdcGlow(preset: GlowPreset, intensity: GlowIntensity) {
       const cloned = cloneNode(node);
       if (!cloned) continue;
       cloned.name = layerName;
-      applyWwdcGlowLayerStyle(layerName, cloned, preset, intensity);
+      applyWwdcGlowLayerStyle(layerName, cloned, preset, intensity, direction);
       parent.appendChild(cloned);
       layers.push(cloned);
     }
@@ -841,9 +872,14 @@ figma.ui.onmessage = async (msg: PluginMessage | { type?: string; [key: string]:
     case 'applyWwdcGlow':
       if (
         isGlowPreset((msg as PluginMessage).preset) &&
-        isGlowIntensity((msg as PluginMessage).intensity)
+        isGlowIntensity((msg as PluginMessage).intensity) &&
+        isLightDirection((msg as PluginMessage).direction)
       ) {
-        applyWwdcGlow((msg as PluginMessage).preset, (msg as PluginMessage).intensity);
+        applyWwdcGlow(
+          (msg as PluginMessage).preset,
+          (msg as PluginMessage).intensity,
+          (msg as PluginMessage).direction
+        );
       }
       return;
     default:

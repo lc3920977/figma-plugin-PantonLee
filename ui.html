@@ -189,6 +189,15 @@
     </div>
 
     <div class="row">
+      <select id="lightDirection">
+        <option value="leftToRight">Left → Right</option>
+        <option value="rightToLeft">Right → Left</option>
+        <option value="topToBottom">Top → Bottom</option>
+        <option value="bottomToTop">Bottom → Top</option>
+      </select>
+    </div>
+
+    <div class="row">
       <button id="applyWwdcGlow" class="primary">Apply WWDC Glow</button>
     </div>
 
@@ -221,7 +230,8 @@
       document.getElementById('applyWwdcGlow').onclick = () => {
         const preset = document.getElementById('wwdcPreset').value;
         const intensity = document.getElementById('wwdcIntensity').value;
-        send('applyWwdcGlow', { preset, intensity });
+        const direction = document.getElementById('lightDirection').value;
+        send('applyWwdcGlow', { preset, intensity, direction });
       };
 
       window.addEventListener('keydown', (e) => {
