@@ -13,6 +13,7 @@
         font: 12px/1.4 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
         margin: 12px;
         color: rgba(0, 0, 0, 0.85);
+        overflow-y: auto;
       }
 
       .header {
@@ -112,6 +113,150 @@
         margin-top: 8px;
         color: rgba(0, 0, 0, 0.55);
       }
+
+      .tab-bar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        margin: 10px 0 12px;
+        padding: 3px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.045);
+      }
+
+      .tab-button {
+        padding: 8px 10px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: rgba(0, 0, 0, 0.62);
+        font-weight: 600;
+      }
+
+      .tab-button.active {
+        background: #fff;
+        color: rgba(0, 0, 0, 0.88);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+
+      .tab-panel {
+        display: none;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
+      .tool-section {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+      }
+
+      label {
+        display: block;
+        margin: 10px 0 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(0, 0, 0, 0.72);
+      }
+
+      input,
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 10px;
+        background: #fff;
+        color: rgba(0, 0, 0, 0.85);
+        font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        outline: none;
+      }
+
+      input {
+        padding: 8px 10px;
+      }
+
+      textarea {
+        min-height: 76px;
+        padding: 8px 10px;
+        resize: vertical;
+      }
+
+      textarea.output {
+        min-height: 64px;
+        background: rgba(0, 0, 0, 0.025);
+      }
+
+      .button-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .button-grid button {
+        width: 100%;
+      }
+
+      .button-grid button.wide {
+        grid-column: 1 / -1;
+      }
+
+      .batch-list {
+        margin-top: 6px;
+        padding: 7px 9px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.035);
+        color: rgba(0, 0, 0, 0.62);
+        display: none;
+      }
+
+      .preview-box {
+        min-height: 88px;
+        margin-top: 6px;
+        border: 1px dashed rgba(0, 0, 0, 0.18);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(45deg, rgba(0,0,0,0.035) 25%, transparent 25%),
+          linear-gradient(-45deg, rgba(0,0,0,0.035) 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.035) 75%),
+          linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.035) 75%);
+        background-size: 16px 16px;
+        background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      }
+
+      .preview-box svg {
+        max-width: 64px;
+        max-height: 64px;
+      }
+
+      .message {
+        margin-top: 8px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        display: none;
+      }
+
+      .message.error {
+        display: block;
+        color: #8a1f11;
+        background: #fff0ed;
+      }
+
+      .message.warning {
+        display: block;
+        color: #6f4c00;
+        background: #fff7df;
+      }
+
+      .message.info {
+        display: block;
+        color: rgba(0, 0, 0, 0.72);
+        background: rgba(0, 0, 0, 0.045);
+      }
     </style>
   </head>
 
@@ -124,50 +269,102 @@
           <path d="M6 12V6h2.4c1.5 0 2.4.8 2.4 2 0 1.2-.9 2-2.4 2H7.3V12H6Zm1.3-3.2h1.1c.8 0 1.3-.3 1.3-.8s-.5-.8-1.3-.8H7.3v1.6Z" fill="rgba(0,0,0,0.7)"/>
         </svg>
       </div>
-      <div class="title">自动适配到容器</div>
+      <div class="title">PantonLEELab</div>
     </div>
 
-    <div class="row">
-      <button id="fit">适合复合</button>
-      <button id="fitW">适合宽度</button>
-      <button id="fitH">适合高度</button>
+    <div class="tab-bar" role="tablist" aria-label="PantonLEELab tools">
+      <button id="toolsTabButton" class="tab-button" type="button" data-tab="tools">基础工具</button>
+      <button id="androidTabButton" class="tab-button active" type="button" data-tab="android">Android XML</button>
     </div>
 
-    <div class="hint">
-      复合变换用法1（单选）：选中任意图层 → 点击按钮（保持比例）<br />
-      复合变换用法2（多选）：在同一容器内选中多个<strong>子层</strong> → 自动按它们的父级容器适配<br />
-      快捷键（仅对本区生效）：1/2/3
+    <div id="toolsTab" class="tab-panel">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true">F</div>
+        <div class="section-title">自动适配到容器</div>
+      </div>
+
+      <div class="row">
+        <button id="fit">适合复合</button>
+        <button id="fitW">适合宽度</button>
+        <button id="fitH">适合高度</button>
+      </div>
+
+      <div class="hint">
+        复合变换用法1（单选）：选中任意图层 → 点击按钮（保持比例）<br />
+        复合变换用法2（多选）：在同一容器内选中多个<strong>子层</strong> → 自动按它们的父级容器适配<br />
+        快捷键（仅对本区生效）：1/2/3
+      </div>
+
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true">T</div>
+        <div class="section-title">行高预设</div>
+      </div>
+
+      <div class="row">
+        <button id="lhAuto">Auto</button>
+        <button id="lhSmart" class="primary">智能行高</button>
+      </div>
+
+      <div class="row">
+        <select id="lineHeightSelect">
+          <option value="auto">Auto — 跟随字体默认</option>
+          <option value="1.0">1.0 — 紧凑排版/数据密集</option>
+          <option value="1.1">1.1 — 英文UI小字号紧凑</option>
+          <option value="1.2">1.2 — EN推荐/英文正文舒适</option>
+          <option value="1.3">1.3 — 英文偏松/副标题</option>
+          <option value="1.4">1.4 — ZH UI推荐/中文正文偏紧</option>
+          <option value="1.5">1.5 — ZH段落推荐/中文段落舒适</option>
+          <option value="1.6">1.6 — ZH衬线/长文推荐</option>
+          <option value="1.8">1.8 — 阅读无障碍/轻松</option>
+          <option value="2.0">2.0 — 超松/强阅读性</option>
+        </select>
+      </div>
+
+      <div class="hint">
+        行高用法：选中文本（或选中一个容器让它递归处理内部文本） → 点预设按钮/下拉选项<br />
+        说明：智能行高会自动匹配中英文推荐行高（1.5x/1.2x）；<br />
+        遇到混合字号/混合字体或无法明确判断语言的文本会自动跳过，并在提示里汇总数量
+      </div>
     </div>
 
-    <div class="section-header">
-      <div class="section-icon" aria-hidden="true">T</div>
-      <div class="section-title">行高预设</div>
-    </div>
+    <div id="androidTab" class="tab-panel active">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true">V</div>
+        <div class="section-title">Android XML 转 SVG</div>
+      </div>
 
-    <div class="row">
-      <button id="lhAuto">Auto</button>
-      <button id="lhSmart" class="primary">智能行高</button>
-    </div>
+      <label for="androidXmlInput">Android VectorDrawable XML</label>
+      <input id="androidXmlFile" type="file" accept=".xml,text/xml,application/xml" multiple />
+      <div id="batchFileList" class="batch-list"></div>
+      <textarea id="androidXmlInput" placeholder="粘贴 &lt;vector&gt;...&lt;/vector&gt;"></textarea>
 
-    <div class="row">
-      <select id="lineHeightSelect">
-        <option value="auto">Auto — 跟随字体默认</option>
-        <option value="1.0">1.0 — 紧凑排版/数据密集</option>
-        <option value="1.1">1.1 — 英文UI小字号紧凑</option>
-        <option value="1.2">1.2 — EN推荐/英文正文舒适</option>
-        <option value="1.3">1.3 — 英文偏松/副标题</option>
-        <option value="1.4">1.4 — ZH UI推荐/中文正文偏紧</option>
-        <option value="1.5">1.5 — ZH段落推荐/中文段落舒适</option>
-        <option value="1.6">1.6 — ZH衬线/长文推荐</option>
-        <option value="1.8">1.8 — 阅读无障碍/轻松</option>
-        <option value="2.0">2.0 — 超松/强阅读性</option>
-      </select>
-    </div>
+      <label for="symbolIdInput">Symbol ID</label>
+      <input id="symbolIdInput" value="icon-converted" />
 
-    <div class="hint">
-      行高用法：选中文本（或选中一个容器让它递归处理内部文本） → 点预设按钮/下拉选项<br />
-      说明：智能行高会自动匹配中英文推荐行高（1.5x/1.2x）；<br />
-      遇到混合字号/混合字体或无法明确判断语言的文本会自动跳过，并在提示里汇总数量
+      <label for="colorResourceInput">颜色资源 XML（可选）</label>
+      <textarea id="colorResourceInput" placeholder="可粘贴 colors.xml / selector color XML，用来解析 @color/..."></textarea>
+
+      <label for="resourceFallbackColorInput">未解析资源色兜底颜色</label>
+      <input id="resourceFallbackColorInput" value="#FF00FF" />
+
+      <div class="button-grid">
+        <button id="convertAndroidXml" class="primary">转换</button>
+        <button id="clearAndroidXml">清空</button>
+        <button id="insertSvgToCanvas" class="wide">插入 SVG 到画布</button>
+        <button id="copySvg">复制 SVG 代码</button>
+        <button id="copySymbol">复制 Symbol 代码</button>
+      </div>
+
+      <div id="convertMessage" class="message"></div>
+
+      <label>预览</label>
+      <div id="svgPreview" class="preview-box"></div>
+
+      <label for="svgOutput">SVG 输出</label>
+      <textarea id="svgOutput" class="output" readonly></textarea>
+
+      <label for="symbolOutput">Symbol 输出</label>
+      <textarea id="symbolOutput" class="output" readonly></textarea>
     </div>
 
     <script>
@@ -178,6 +375,22 @@
        * 把消息发到插件主线程，然后在 code.js 里用 figma.ui.onmessage 接收。
        */
       const send = (type, payload = {}) => parent.postMessage({ pluginMessage: { type, ...payload } }, '*');
+      let androidXmlFileItems = [];
+      let androidResourceFileItems = [];
+      let androidFileColorResources = {};
+      let convertedAndroidXmlItems = [];
+      let activeTab = 'android';
+
+      function setActiveTab(tabName) {
+        activeTab = tabName;
+        document.getElementById('toolsTab').classList.toggle('active', tabName === 'tools');
+        document.getElementById('androidTab').classList.toggle('active', tabName === 'android');
+        document.getElementById('toolsTabButton').classList.toggle('active', tabName === 'tools');
+        document.getElementById('androidTabButton').classList.toggle('active', tabName === 'android');
+      }
+
+      document.getElementById('toolsTabButton').onclick = () => setActiveTab('tools');
+      document.getElementById('androidTabButton').onclick = () => setActiveTab('android');
 
       document.getElementById('fit').onclick = () => send('fit');
       document.getElementById('fitW').onclick = () => send('fitWidth');
@@ -191,7 +404,715 @@
         send('lineHeightPreset', { preset });
       };
 
+      /**
+       * @typedef {{ message: string, node?: string, attr?: string }} ConvertWarning
+       * @typedef {{ symbolId: string, colorResources?: Record<string, string>, resourceFallbackColor?: string }} ConvertOptions
+       * @typedef {{ svg: string, symbol: string, viewBox: string, warnings: ConvertWarning[] }} ConvertResult
+       */
+
+      const UNSUPPORTED_ATTRS = [
+        'trimPathStart',
+        'trimPathEnd',
+        'trimPathOffset',
+        'clipPathData',
+        'fillType',
+      ];
+
+      function getAndroidAttr(node, name) {
+        return node.getAttribute('android:' + name) || node.getAttribute(name);
+      }
+
+      function escapeAttr(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function normalizeDp(value) {
+        if (!value) return '';
+        return String(value).trim().replace(/dp$/i, '');
+      }
+
+      function formatOpacity(value) {
+        const rounded = Math.round(value * 1000) / 1000;
+        return String(rounded).replace(/0+$/, '').replace(/\.$/, '');
+      }
+
+      function pushUnsupportedWarnings(node, warnings) {
+        UNSUPPORTED_ATTRS.forEach((attr) => {
+          if (attr === 'fillType') return;
+          if (getAndroidAttr(node, attr) !== null) {
+            warnings.push({ message: '暂不支持 ' + attr + '，已忽略该属性。', node: node.nodeName, attr });
+          }
+        });
+
+        Array.from(node.attributes || []).forEach((attr) => {
+          const value = attr.value || '';
+          if (attr.name.indexOf('gradient') !== -1 || value.indexOf('gradient') !== -1) {
+            warnings.push({ message: '暂不支持 gradient / 渐变，已忽略相关属性。', node: node.nodeName, attr: attr.name });
+          }
+          if (attr.name.indexOf('aapt:') === 0) {
+            warnings.push({ message: '暂不支持 aapt:attr，已忽略相关属性。', node: node.nodeName, attr: attr.name });
+          }
+        });
+      }
+
+      function parseAndroidColor(value, targetAttr, warnings) {
+        if (!value) return [];
+        const raw = value.trim();
+
+        if (raw.indexOf('@') === 0 || raw.indexOf('?') === 0) {
+          warnings.push({ message: '暂不支持 Android 资源色 ' + raw + '，已使用兜底颜色 #FF00FF。', attr: targetAttr });
+          return parseAndroidColor('#FF00FF', targetAttr, warnings);
+        }
+
+        if (/^#[0-9a-fA-F]{8}$/.test(raw)) {
+          const alpha = parseInt(raw.slice(1, 3), 16) / 255;
+          const rgb = '#' + raw.slice(3).toUpperCase();
+          const opacityAttr = targetAttr === 'fill' ? 'fill-opacity' : 'stroke-opacity';
+          return [[targetAttr, rgb], [opacityAttr, formatOpacity(alpha)]];
+        }
+
+        if (/^#[0-9a-fA-F]{6}$/.test(raw)) {
+          return [[targetAttr, raw.toUpperCase()]];
+        }
+
+        return [[targetAttr, raw]];
+      }
+
+      function parseColorLiteral(value) {
+        if (!value) return null;
+        const raw = String(value).trim();
+        if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+          return '#' + raw.slice(1).split('').map((char) => char + char).join('').toUpperCase();
+        }
+        if (/^#[0-9a-fA-F]{4}$/.test(raw)) {
+          return '#' + raw.slice(1).split('').map((char) => char + char).join('').toUpperCase();
+        }
+        if (/^#[0-9a-fA-F]{6}$/.test(raw) || /^#[0-9a-fA-F]{8}$/.test(raw)) {
+          return raw.toUpperCase();
+        }
+        if (raw.indexOf('@color/') === 0 || raw.indexOf('@android:color/') === 0) {
+          return raw;
+        }
+        return null;
+      }
+
+      function builtInAndroidColor(name) {
+        const colors = {
+          black: '#000000',
+          white: '#FFFFFF',
+          transparent: '#00000000',
+          holo_blue_light: '#FF33B5E5',
+          holo_blue_dark: '#FF0099CC',
+          holo_green_light: '#FF99CC00',
+          holo_green_dark: '#FF669900',
+          holo_red_light: '#FFFF4444',
+          holo_red_dark: '#FFCC0000',
+          holo_orange_light: '#FFFFBB33',
+          holo_orange_dark: '#FFFF8800',
+          holo_purple: '#FFAA66CC',
+        };
+        return colors[name] || null;
+      }
+
+      function getColorResourceName(reference) {
+        const match = String(reference || '').trim().match(/^@(android:)?color\/([A-Za-z0-9_.-]+)$/);
+        return match ? { isAndroid: Boolean(match[1]), name: match[2] } : null;
+      }
+
+      function resolveColorResource(reference, colorResources, stack = []) {
+        const resource = getColorResourceName(reference);
+        if (!resource) return null;
+        if (resource.isAndroid) return builtInAndroidColor(resource.name);
+        if (stack.indexOf(resource.name) !== -1) return null;
+
+        const value = colorResources[resource.name];
+        if (!value) return null;
+        if (String(value).indexOf('@') === 0) {
+          return resolveColorResource(value, colorResources, stack.concat(resource.name));
+        }
+        return parseColorLiteral(value);
+      }
+
+      function parseAndroidColorWithResources(value, targetAttr, warnings, colorResources, fallbackColor) {
+        if (!value) return [];
+        const raw = value.trim();
+        const safeFallback = parseColorLiteral(fallbackColor) || '#FF00FF';
+
+        if (raw.indexOf('@color/') === 0 || raw.indexOf('@android:color/') === 0) {
+          const resolved = resolveColorResource(raw, colorResources || {});
+          if (resolved) {
+            return parseAndroidColor(resolved, targetAttr, warnings);
+          }
+          warnings.push({ message: '暂未找到 Android 资源色 ' + raw + '，已使用兜底颜色 ' + safeFallback + '。', attr: targetAttr });
+          return parseAndroidColor(safeFallback, targetAttr, warnings);
+        }
+
+        if (raw.indexOf('?') === 0) {
+          warnings.push({ message: '暂不支持 theme attribute ' + raw + '，已使用兜底颜色 ' + safeFallback + '。', attr: targetAttr });
+          return parseAndroidColor(safeFallback, targetAttr, warnings);
+        }
+
+        return parseAndroidColor(raw, targetAttr, warnings);
+      }
+
+      function selectorDefaultColor(root) {
+        const items = Array.from(root.children || []).filter((node) => node.localName === 'item');
+        const defaultItem = items.find((item) =>
+          !Array.from(item.attributes || []).some((attr) => attr.name.indexOf('state_') !== -1 || attr.name.indexOf('android:state') === 0)
+        );
+        const item = defaultItem || items[0];
+        return item ? getAndroidAttr(item, 'color') || getAndroidAttr(item, 'drawable') : null;
+      }
+
+      function parseAndroidColorResources(inputXml, fileName) {
+        const colorResources = {};
+        if (!inputXml || !inputXml.trim()) return colorResources;
+
+        const doc = new DOMParser().parseFromString(inputXml, 'application/xml');
+        if (doc.querySelector('parsererror')) return colorResources;
+
+        const root = doc.documentElement;
+        if (!root) return colorResources;
+
+        if (root.localName === 'resources') {
+          Array.from(root.children || []).forEach((node) => {
+            const name = node.getAttribute('name');
+            if (!name) return;
+            if (node.localName === 'color' || (node.localName === 'item' && node.getAttribute('type') === 'color')) {
+              const value = parseColorLiteral(node.textContent || '');
+              if (value) colorResources[name] = value;
+            }
+          });
+          return colorResources;
+        }
+
+        if (root.localName === 'selector') {
+          const baseName = String(fileName || '')
+            .replace(/\.[^.]+$/, '')
+            .replace(/[^a-zA-Z0-9_.-]+/g, '_');
+          const value = parseColorLiteral(selectorDefaultColor(root));
+          if (baseName && value) colorResources[baseName] = value;
+          return colorResources;
+        }
+
+        if (root.localName === 'color') {
+          const name = root.getAttribute('name') || String(fileName || '').replace(/\.[^.]+$/, '');
+          const value = parseColorLiteral(root.textContent || '');
+          if (name && value) colorResources[name] = value;
+        }
+
+        return colorResources;
+      }
+
+      function addAttr(attrs, name, value) {
+        if (value === null || value === undefined || value === '') return;
+        const existing = attrs.find((attr) => attr[0] === name);
+        if (existing) {
+          existing[1] = value;
+          return;
+        }
+        attrs.push([name, value]);
+      }
+
+      function attrsToString(attrs) {
+        return attrs.map(([name, value]) => name + '="' + escapeAttr(value) + '"').join(' ');
+      }
+
+      function sanitizeSvgId(value) {
+        return String(value || 'icon-converted')
+          .replace(/[^a-zA-Z0-9_-]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'icon-converted';
+      }
+
+      function addDefsNode(context, line) {
+        context.defs.push(line);
+      }
+
+      function getAaptAttrChild(node, androidAttrName) {
+        return Array.from(node.children || []).find((child) =>
+          child.nodeName === 'aapt:attr' &&
+          (child.getAttribute('name') === androidAttrName || child.getAttribute('android:name') === androidAttrName)
+        );
+      }
+
+      function getGradientFromAaptAttr(node, androidAttrName) {
+        const attrNode = getAaptAttrChild(node, androidAttrName);
+        if (!attrNode) return null;
+        return Array.from(attrNode.children || []).find((child) => child.localName === 'gradient') || null;
+      }
+
+      function parseStopColorAttrs(value, warnings, colorResources, resourceFallbackColor) {
+        const attrs = [];
+        parseAndroidColorWithResources(value, 'fill', warnings, colorResources, resourceFallbackColor).forEach(([name, attrValue]) => {
+          if (name === 'fill') addAttr(attrs, 'stop-color', attrValue);
+          if (name === 'fill-opacity') addAttr(attrs, 'stop-opacity', attrValue);
+        });
+        return attrs;
+      }
+
+      function createGradientDef(gradientNode, context, warnings, colorResources, resourceFallbackColor) {
+        if (!gradientNode) return '';
+
+        const type = getAndroidAttr(gradientNode, 'type') || 'linear';
+        const id = context.idPrefix + '-gradient-' + context.gradientCount++;
+        const stops = Array.from(gradientNode.children || []).filter((node) => node.localName === 'item');
+        const stopLines = stops.map((stopNode) => {
+          const attrs = parseStopColorAttrs(getAndroidAttr(stopNode, 'color'), warnings, colorResources, resourceFallbackColor);
+          addAttr(attrs, 'offset', getAndroidAttr(stopNode, 'offset') || '0');
+          return '    <stop ' + attrsToString(attrs) + '/>';
+        });
+
+        if (type === 'linear') {
+          const attrs = [
+            ['id', id],
+            ['gradientUnits', 'userSpaceOnUse'],
+            ['x1', getAndroidAttr(gradientNode, 'startX') || '0'],
+            ['y1', getAndroidAttr(gradientNode, 'startY') || '0'],
+            ['x2', getAndroidAttr(gradientNode, 'endX') || '0'],
+            ['y2', getAndroidAttr(gradientNode, 'endY') || '0'],
+          ];
+          addDefsNode(context, '  <linearGradient ' + attrsToString(attrs) + '>\n' + stopLines.join('\n') + '\n  </linearGradient>');
+          return id;
+        }
+
+        warnings.push({ message: '暂不完整支持 ' + type + ' gradient，已尝试按线性渐变处理。', node: 'gradient' });
+        const attrs = [
+          ['id', id],
+          ['gradientUnits', 'userSpaceOnUse'],
+          ['x1', getAndroidAttr(gradientNode, 'startX') || '0'],
+          ['y1', getAndroidAttr(gradientNode, 'startY') || '0'],
+          ['x2', getAndroidAttr(gradientNode, 'endX') || '0'],
+          ['y2', getAndroidAttr(gradientNode, 'endY') || '0'],
+        ];
+        addDefsNode(context, '  <linearGradient ' + attrsToString(attrs) + '>\n' + stopLines.join('\n') + '\n  </linearGradient>');
+        return id;
+      }
+
+      function createClipPathDef(node, context) {
+        const pathData = getAndroidAttr(node, 'pathData');
+        if (!pathData) return '';
+        const id = context.idPrefix + '-clip-' + context.clipCount++;
+        addDefsNode(context, '  <clipPath id="' + escapeAttr(id) + '">\n    <path d="' + escapeAttr(pathData) + '"/>\n  </clipPath>');
+        return id;
+      }
+
+      function fileNameToSymbolId(fileName) {
+        const baseName = String(fileName || '')
+          .replace(/\.[^.]+$/, '')
+          .replace(/_svg$/i, '')
+          .replace(/[^a-zA-Z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .toLowerCase();
+        return baseName ? 'icon-' + baseName : 'icon-converted';
+      }
+
+      function updateBatchFileList() {
+        const box = document.getElementById('batchFileList');
+        if (!androidXmlFileItems.length && !androidResourceFileItems.length) {
+          box.style.display = 'none';
+          box.innerHTML = '';
+          return;
+        }
+
+        const fileNames = androidXmlFileItems.map((item) => item.fileName);
+        box.style.display = 'block';
+        box.innerHTML =
+          '已选择 ' + fileNames.length + ' 个 drawable XML' +
+          (androidResourceFileItems.length ? '，' + androidResourceFileItems.length + ' 个颜色资源文件，解析 ' + Object.keys(androidFileColorResources).length + ' 个颜色。' : '。') +
+          (fileNames.length ? '<br />' + escapeAttr(fileNames.join('、')) : '');
+      }
+
+      function isVectorDrawableXml(inputXml) {
+        if (!inputXml || !inputXml.trim()) return false;
+        const doc = new DOMParser().parseFromString(inputXml, 'application/xml');
+        return !doc.querySelector('parsererror') && doc.documentElement && doc.documentElement.localName === 'vector';
+      }
+
+      function mergeColorResources(resourceItems, manualXml) {
+        const merged = {};
+        resourceItems.forEach((item) => {
+          Object.assign(merged, parseAndroidColorResources(item.xml, item.fileName));
+        });
+        Object.assign(merged, parseAndroidColorResources(manualXml || '', 'manual-colors.xml'));
+        return merged;
+      }
+
+      function convertPathNode(node, warnings, colorResources, resourceFallbackColor, context, clipPathId) {
+        pushUnsupportedWarnings(node, warnings);
+
+        const pathData = getAndroidAttr(node, 'pathData');
+        if (!pathData) {
+          warnings.push({ message: '发现缺少 pathData 的 path，已跳过。', node: 'path', attr: 'pathData' });
+          return '';
+        }
+
+        const attrs = [['d', pathData]];
+        const fillGradientId = createGradientDef(
+          getGradientFromAaptAttr(node, 'android:fillColor'),
+          context,
+          warnings,
+          colorResources,
+          resourceFallbackColor
+        );
+        if (fillGradientId) {
+          addAttr(attrs, 'fill', 'url(#' + fillGradientId + ')');
+        } else {
+          parseAndroidColorWithResources(getAndroidAttr(node, 'fillColor'), 'fill', warnings, colorResources, resourceFallbackColor).forEach(([name, value]) => addAttr(attrs, name, value));
+        }
+        addAttr(attrs, 'fill-opacity', getAndroidAttr(node, 'fillAlpha'));
+        const strokeGradientId = createGradientDef(
+          getGradientFromAaptAttr(node, 'android:strokeColor'),
+          context,
+          warnings,
+          colorResources,
+          resourceFallbackColor
+        );
+        if (strokeGradientId) {
+          addAttr(attrs, 'stroke', 'url(#' + strokeGradientId + ')');
+        } else {
+          parseAndroidColorWithResources(getAndroidAttr(node, 'strokeColor'), 'stroke', warnings, colorResources, resourceFallbackColor).forEach(([name, value]) => addAttr(attrs, name, value));
+        }
+        addAttr(attrs, 'stroke-opacity', getAndroidAttr(node, 'strokeAlpha'));
+        addAttr(attrs, 'stroke-width', getAndroidAttr(node, 'strokeWidth'));
+        addAttr(attrs, 'stroke-linecap', getAndroidAttr(node, 'strokeLineCap'));
+        addAttr(attrs, 'stroke-linejoin', getAndroidAttr(node, 'strokeLineJoin'));
+        addAttr(attrs, 'stroke-miterlimit', getAndroidAttr(node, 'strokeMiterLimit'));
+
+        if (getAndroidAttr(node, 'fillType') === 'evenOdd') {
+          addAttr(attrs, 'fill-rule', 'evenodd');
+        } else if (getAndroidAttr(node, 'fillType')) {
+          warnings.push({ message: '暂不支持 fillType=' + getAndroidAttr(node, 'fillType') + '，已忽略该属性。', node: 'path', attr: 'fillType' });
+        }
+
+        if (clipPathId) {
+          addAttr(attrs, 'clip-path', 'url(#' + clipPathId + ')');
+        }
+
+        return '  <path ' + attrsToString(attrs) + '/>';
+      }
+
+      function buildGroupTransform(node, warnings) {
+        const translateX = getAndroidAttr(node, 'translateX');
+        const translateY = getAndroidAttr(node, 'translateY');
+        const scaleX = getAndroidAttr(node, 'scaleX');
+        const scaleY = getAndroidAttr(node, 'scaleY');
+        const rotation = getAndroidAttr(node, 'rotation');
+        const pivotX = getAndroidAttr(node, 'pivotX');
+        const pivotY = getAndroidAttr(node, 'pivotY');
+        const transforms = [];
+
+        if (translateX || translateY) transforms.push('translate(' + (translateX || '0') + ' ' + (translateY || '0') + ')');
+        if (rotation) {
+          transforms.push(pivotX || pivotY ? 'rotate(' + rotation + ' ' + (pivotX || '0') + ' ' + (pivotY || '0') + ')' : 'rotate(' + rotation + ')');
+        }
+        if (scaleX || scaleY) transforms.push('scale(' + (scaleX || '1') + ' ' + (scaleY || scaleX || '1') + ')');
+
+        if (transforms.length > 1 || pivotX || pivotY) {
+          warnings.push({ message: '复杂 group transform 可能与 Android 渲染存在轻微差异。', node: 'group' });
+        }
+
+        return transforms.join(' ');
+      }
+
+      function convertDrawableChildren(parentNode, warnings, colorResources, resourceFallbackColor, context, depth = 1, activeClipPathId = '') {
+        const lines = [];
+        let clipPathId = activeClipPathId;
+
+        Array.from(parentNode.children || []).forEach((child) => {
+          const name = child.localName;
+
+          if (name === 'path') {
+            const path = convertPathNode(child, warnings, colorResources, resourceFallbackColor, context, clipPathId);
+            if (path) lines.push('  '.repeat(depth) + path.trim());
+            return;
+          }
+
+          if (name === 'group') {
+            pushUnsupportedWarnings(child, warnings);
+            const transform = buildGroupTransform(child, warnings);
+            const attrs = [];
+            addAttr(attrs, 'transform', transform);
+            lines.push('  '.repeat(depth) + '<g' + (attrs.length ? ' ' + attrsToString(attrs) : '') + '>');
+            lines.push(...convertDrawableChildren(child, warnings, colorResources, resourceFallbackColor, context, depth + 1, clipPathId));
+            lines.push('  '.repeat(depth) + '</g>');
+            return;
+          }
+
+          if (name === 'clip-path' || name === 'clip') {
+            const id = createClipPathDef(child, context);
+            if (id) {
+              clipPathId = id;
+            } else {
+              warnings.push({ message: '发现缺少 pathData 的 clip path，已忽略该节点。', node: name });
+            }
+            return;
+          }
+
+          if (name === 'aapt:attr' || child.nodeName === 'aapt:attr') {
+            warnings.push({ message: '暂不支持 aapt:attr，已忽略该节点。', node: child.nodeName });
+            return;
+          }
+
+          warnings.push({ message: '暂不支持 <' + child.nodeName + '> 节点，已忽略。', node: child.nodeName });
+        });
+
+        return lines;
+      }
+
+      /**
+       * @param {string} inputXml
+       * @param {ConvertOptions} options
+       * @returns {ConvertResult}
+       */
+      function convertAndroidVectorXmlToSvg(inputXml, options) {
+        if (!inputXml || !inputXml.trim()) throw new Error('请输入 Android VectorDrawable XML。');
+
+        const warnings = [];
+        const doc = new DOMParser().parseFromString(inputXml, 'application/xml');
+        const parseError = doc.querySelector('parsererror');
+        if (parseError) throw new Error('XML 格式不合法，请检查标签闭合与属性引号。');
+
+        const vector = doc.documentElement;
+        if (!vector || vector.localName !== 'vector') throw new Error('根节点必须是 <vector>。');
+
+        if (inputXml.indexOf('<animated-vector') !== -1 || inputXml.indexOf('animated-vector') !== -1) {
+          warnings.push({ message: '暂不支持 animation vector drawable，已仅尝试转换静态 vector。' });
+        }
+
+        const viewportWidth = getAndroidAttr(vector, 'viewportWidth');
+        const viewportHeight = getAndroidAttr(vector, 'viewportHeight');
+        if (!viewportWidth || !viewportHeight) throw new Error('缺少 viewportWidth / viewportHeight，无法生成 viewBox。');
+
+        const width = normalizeDp(getAndroidAttr(vector, 'width')) || viewportWidth;
+        const height = normalizeDp(getAndroidAttr(vector, 'height')) || viewportHeight;
+        const viewBox = '0 0 ' + viewportWidth + ' ' + viewportHeight;
+        const symbolId = options.symbolId && options.symbolId.trim() ? options.symbolId.trim() : 'icon-converted';
+        const context = {
+          defs: [],
+          gradientCount: 0,
+          clipCount: 0,
+          idPrefix: sanitizeSvgId(symbolId),
+        };
+        const bodyLines = convertDrawableChildren(
+          vector,
+          warnings,
+          options.colorResources || {},
+          options.resourceFallbackColor || '#FF00FF',
+          context
+        );
+        const pathCount = bodyLines.filter((line) => line.indexOf('<path ') !== -1).length;
+        if (!pathCount) throw new Error('没有任何可转换 path。');
+        const defsLines = context.defs.length ? ['  <defs>', ...context.defs, '  </defs>'] : [];
+        const svgContentLines = defsLines.concat(bodyLines);
+
+        const svgAttrs = [
+          ['xmlns', 'http://www.w3.org/2000/svg'],
+          ['width', width],
+          ['height', height],
+          ['viewBox', viewBox],
+        ];
+        const svg = '<svg ' + attrsToString(svgAttrs) + '>\n' + svgContentLines.join('\n') + '\n</svg>';
+        const symbol = '<symbol id="' + escapeAttr(symbolId) + '" viewBox="' + escapeAttr(viewBox) + '">\n' + svgContentLines.join('\n') + '\n</symbol>';
+
+        return { svg, symbol, viewBox, warnings };
+      }
+
+      function setConvertMessage(kind, messages) {
+        const box = document.getElementById('convertMessage');
+        box.className = 'message' + (kind ? ' ' + kind : '');
+        box.innerHTML = messages && messages.length ? messages.map((item) => '<div>' + escapeAttr(item) + '</div>').join('') : '';
+      }
+
+      function setConvertedOutputs(items) {
+        const svgOutput = document.getElementById('svgOutput');
+        const symbolOutput = document.getElementById('symbolOutput');
+        const preview = document.getElementById('svgPreview');
+
+        convertedAndroidXmlItems = items;
+        svgOutput.value = items.map((item) => '<!-- ' + item.fileName + ' -->\n' + item.svg).join('\n\n');
+        symbolOutput.value = items.map((item) => '<!-- ' + item.fileName + ' -->\n' + item.symbol).join('\n\n');
+        preview.innerHTML = items[0] ? items[0].svg : '';
+      }
+
+      function convertSingleInputItem(xml, symbolId, fileName, colorResources, resourceFallbackColor) {
+        const result = convertAndroidVectorXmlToSvg(xml, { symbolId, colorResources, resourceFallbackColor });
+        return {
+          fileName: fileName || 'converted.svg',
+          name: fileName || 'converted.svg',
+          svg: result.svg,
+          symbol: result.symbol,
+          viewBox: result.viewBox,
+          warnings: result.warnings,
+        };
+      }
+
+      function runAndroidXmlConversion() {
+        const input = document.getElementById('androidXmlInput').value;
+        const symbolId = document.getElementById('symbolIdInput').value;
+        const colorResources = mergeColorResources(androidResourceFileItems, document.getElementById('colorResourceInput').value);
+        const resourceFallbackColor = document.getElementById('resourceFallbackColorInput').value;
+
+        const items = [];
+        const errors = [];
+
+        if (androidXmlFileItems.length) {
+          androidXmlFileItems.forEach((item) => {
+            try {
+              items.push(convertSingleInputItem(
+                item.xml,
+                androidXmlFileItems.length === 1 ? symbolId : fileNameToSymbolId(item.fileName),
+                item.fileName,
+                colorResources,
+                resourceFallbackColor
+              ));
+            } catch (error) {
+              errors.push(item.fileName + '：' + (error.message || '转换失败。'));
+            }
+          });
+        } else {
+          try {
+            items.push(convertSingleInputItem(input, symbolId, 'converted.svg', colorResources, resourceFallbackColor));
+          } catch (error) {
+            errors.push(error.message || '转换失败。');
+          }
+        }
+
+        if (items.length) {
+          const warnings = items.flatMap((item) => item.warnings.map((warning) => item.fileName + '：' + warning.message));
+          setConvertedOutputs(items);
+          setConvertMessage(
+            warnings.length || errors.length ? 'warning' : 'info',
+            warnings.length || errors.length
+              ? ['转换完成：成功 ' + items.length + ' 个，失败 ' + errors.length + ' 个。'].concat(warnings, errors)
+              : ['转换完成：成功 ' + items.length + ' 个，已生成 SVG 和 Symbol。']
+          );
+          document.getElementById('convertMessage').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          return items;
+        }
+
+        convertedAndroidXmlItems = [];
+        document.getElementById('svgOutput').value = '';
+        document.getElementById('symbolOutput').value = '';
+        document.getElementById('svgPreview').innerHTML = '';
+        setConvertMessage('error', errors.length ? errors : ['转换失败。']);
+        return [];
+      }
+
+      function copyTextFrom(id, label) {
+        const value = document.getElementById(id).value;
+        if (!value) {
+          setConvertMessage('error', ['没有可复制的 ' + label + '。']);
+          return;
+        }
+        navigator.clipboard.writeText(value).then(
+          () => setConvertMessage('info', [label + ' 已复制。']),
+          () => setConvertMessage('error', [label + ' 复制失败，请手动选择文本复制。'])
+        );
+      }
+
+      function insertSvgToCanvas() {
+        if (!convertedAndroidXmlItems.length && (androidXmlFileItems.length || document.getElementById('androidXmlInput').value.trim())) {
+          runAndroidXmlConversion();
+        }
+
+        if (!convertedAndroidXmlItems.length) {
+          setConvertMessage('error', ['没有可插入的 SVG，请先转换。']);
+          return;
+        }
+
+        if (convertedAndroidXmlItems.length === 1) {
+          const item = convertedAndroidXmlItems[0];
+          send('CREATE_SVG_FROM_ANDROID_XML', { payload: { svg: item.svg, name: item.name } });
+          setConvertMessage('info', ['正在插入 SVG 到 Figma 画布：' + item.name + '。']);
+          return;
+        }
+
+        send('CREATE_SVGS_FROM_ANDROID_XML', {
+          payload: {
+            items: convertedAndroidXmlItems.map((item) => ({ svg: item.svg, name: item.name })),
+          },
+        });
+        setConvertMessage('info', ['正在批量插入 ' + convertedAndroidXmlItems.length + ' 个 SVG 到 Figma 画布。']);
+      }
+
+      function readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error(file.name + ' 读取失败'));
+          reader.readAsText(file);
+        });
+      }
+
+      async function loadAndroidXmlFile(event) {
+        const files = Array.from(event.target.files || []);
+        if (!files.length) return;
+
+        try {
+          const loadedItems = await Promise.all(files.map(async (file) => ({
+            fileName: file.name,
+            xml: await readFileAsText(file),
+          })));
+          androidXmlFileItems = loadedItems.filter((item) => isVectorDrawableXml(item.xml));
+          androidResourceFileItems = loadedItems.filter((item) => !isVectorDrawableXml(item.xml));
+          androidFileColorResources = mergeColorResources(androidResourceFileItems, '');
+          convertedAndroidXmlItems = [];
+          updateBatchFileList();
+          document.getElementById('androidXmlInput').value = androidXmlFileItems.length === 1
+            ? androidXmlFileItems[0].xml
+            : androidXmlFileItems.map((item) => '<!-- ' + item.fileName + ' -->\n' + item.xml).join('\n\n');
+          document.getElementById('symbolIdInput').value = androidXmlFileItems.length === 1
+            ? fileNameToSymbolId(androidXmlFileItems[0].fileName)
+            : androidXmlFileItems.length > 1
+              ? fileNameToSymbolId(androidXmlFileItems[0].fileName)
+              : 'icon-converted';
+          document.getElementById('colorResourceInput').value = '';
+          document.getElementById('svgOutput').value = '';
+          document.getElementById('symbolOutput').value = '';
+          document.getElementById('svgPreview').innerHTML = '';
+          setConvertMessage('info', [
+            '已读取 ' + androidXmlFileItems.length + ' 个 drawable XML，' +
+              androidResourceFileItems.length + ' 个颜色资源文件，解析 ' + Object.keys(androidFileColorResources).length + ' 个颜色。'
+          ]);
+        } catch (error) {
+          androidXmlFileItems = [];
+          androidResourceFileItems = [];
+          androidFileColorResources = {};
+          updateBatchFileList();
+          setConvertMessage('error', [error.message || '文件读取失败，请重新选择 XML 文件。']);
+        }
+      }
+
+      document.getElementById('androidXmlFile').onchange = loadAndroidXmlFile;
+      document.getElementById('convertAndroidXml').onclick = runAndroidXmlConversion;
+      document.getElementById('insertSvgToCanvas').onclick = insertSvgToCanvas;
+      document.getElementById('copySvg').onclick = () => copyTextFrom('svgOutput', 'SVG');
+      document.getElementById('copySymbol').onclick = () => copyTextFrom('symbolOutput', 'Symbol');
+      document.getElementById('clearAndroidXml').onclick = () => {
+        document.getElementById('androidXmlFile').value = '';
+        androidXmlFileItems = [];
+        androidResourceFileItems = [];
+        androidFileColorResources = {};
+        convertedAndroidXmlItems = [];
+        updateBatchFileList();
+        document.getElementById('androidXmlInput').value = '';
+        document.getElementById('symbolIdInput').value = 'icon-converted';
+        document.getElementById('colorResourceInput').value = '';
+        document.getElementById('resourceFallbackColorInput').value = '#FF00FF';
+        document.getElementById('svgOutput').value = '';
+        document.getElementById('symbolOutput').value = '';
+        document.getElementById('svgPreview').innerHTML = '';
+        setConvertMessage('', []);
+      };
+
       window.addEventListener('keydown', (e) => {
+        const tagName = e.target && e.target.tagName;
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return;
+        if (activeTab !== 'tools') return;
         if (e.key === '1') send('fit');
         if (e.key === '2') send('fitWidth');
         if (e.key === '3') send('fitHeight');

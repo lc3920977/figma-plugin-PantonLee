@@ -17,7 +17,7 @@
 // ------------------------------
 // __html__ 会由 Figma 在运行时注入为 ui.html 的内容。
 // 这里控制面板尺寸：你后面想更紧凑/更宽都可以改。
-figma.showUI(__html__, { width: 360, height: 400 });
+figma.showUI(__html__, { width: 420, height: 720 });
 
 // ------------------------------
 // 2) 工具函数：尺寸/容器识别
@@ -244,6 +244,93 @@ function fitSelection(mode) {
   figma.notify(msg);
 }
 
+function createSvgNodeFromAndroidXml(svg, name) {
+  if (!svg || typeof svg !== 'string') {
+    return null;
+  }
+
+  try {
+    var node = figma.createNodeFromSvg(svg);
+    if (name && typeof name === 'string') {
+      node.name = name;
+    }
+    figma.currentPage.appendChild(node);
+    return node;
+  } catch (e) {
+    return null;
+  }
+}
+
+function createSvgFromAndroidXml(svg, name) {
+  var node = createSvgNodeFromAndroidXml(svg, name);
+  if (!node) {
+    figma.notify('SVG 插入失败，请检查转换结果');
+    return;
+  }
+
+  var viewportCenter = figma.viewport.center;
+  node.x = viewportCenter.x - node.width / 2;
+  node.y = viewportCenter.y - node.height / 2;
+  figma.currentPage.selection = [node];
+  figma.viewport.scrollAndZoomIntoView([node]);
+  figma.notify('SVG 已插入当前页面');
+}
+
+function createMultipleSvgsFromAndroidXml(items) {
+  if (!items || !items.length) {
+    figma.notify('没有可批量插入的 SVG');
+    return;
+  }
+
+  var created = [];
+  var gap = 48;
+  var columns = Math.min(6, Math.ceil(Math.sqrt(items.length)));
+  var x = 0;
+  var y = 0;
+  var rowHeight = 0;
+
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var node = createSvgNodeFromAndroidXml(item && item.svg, item && item.name);
+    if (!node) continue;
+
+    node.x = x;
+    node.y = y;
+    created.push(node);
+
+    rowHeight = Math.max(rowHeight, node.height);
+    if ((i + 1) % columns === 0) {
+      x = 0;
+      y += rowHeight + gap;
+      rowHeight = 0;
+    } else {
+      x += node.width + gap;
+    }
+  }
+
+  if (!created.length) {
+    figma.notify('SVG 批量插入失败，请检查转换结果');
+    return;
+  }
+
+  var minX = Math.min.apply(null, created.map(function (node) { return node.x; }));
+  var minY = Math.min.apply(null, created.map(function (node) { return node.y; }));
+  var maxX = Math.max.apply(null, created.map(function (node) { return node.x + node.width; }));
+  var maxY = Math.max.apply(null, created.map(function (node) { return node.y + node.height; }));
+  var viewportCenter = figma.viewport.center;
+  var offsetX = viewportCenter.x - (maxX - minX) / 2 - minX;
+  var offsetY = viewportCenter.y - (maxY - minY) / 2 - minY;
+
+  for (var j = 0; j < created.length; j++) {
+    created[j].x += offsetX;
+    created[j].y += offsetY;
+  }
+
+  figma.currentPage.selection = created;
+  figma.viewport.scrollAndZoomIntoView(created);
+  figma.notify('SVG 批量插入完成：成功 ' + created.length + ' 个');
+}
+
 // ------------------------------
 // 5) UI -> 插件：消息接收
 // ------------------------------
@@ -438,6 +525,16 @@ figma.ui.onmessage = async function (msg) {
     if (isLineHeightPreset(preset)) {
       await applyLineHeightPreset(preset);
     }
+    return;
+  }
+
+  if (msg.type === 'CREATE_SVG_FROM_ANDROID_XML') {
+    createSvgFromAndroidXml(msg.payload && msg.payload.svg, msg.payload && msg.payload.name);
+    return;
+  }
+
+  if (msg.type === 'CREATE_SVGS_FROM_ANDROID_XML') {
+    createMultipleSvgsFromAndroidXml(msg.payload && msg.payload.items);
     return;
   }
 

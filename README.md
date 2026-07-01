@@ -73,6 +73,43 @@
 
 ---
 
+### 3️⃣ Android XML 转 SVG
+
+把 Android VectorDrawable XML 转换为标准 SVG 与可复用的 SVG `<symbol>`。
+插件面板中该功能位于独立的 `Android XML` 页签，旧的适配/行高功能位于 `基础工具` 页签。
+
+**支持输入：**
+
+- 直接粘贴 `<vector>` XML 文本
+- 从本地选择一个或多个 `.xml` 文件并自动填入输入框
+- 可同时选择或粘贴 Android 颜色资源 XML，用来解析 `@color/...`
+- 未解析的资源色默认使用 `#FF00FF` 兜底，可在 UI 中修改
+- 自定义 `symbol id`，默认 `icon-converted`
+
+**输出内容：**
+
+- 标准 SVG
+- SVG Symbol
+- SVG 预览
+- 一键插入单个或批量 SVG 到当前 Figma 画布
+- 批量导入时，Figma 图层名与原始 XML 文件名保持一致
+- warning 提示（遇到暂不支持的 Android XML 属性时继续转换）
+
+**MVP 已支持：**
+
+- `<vector>` 的 `width` / `height` / `viewportWidth` / `viewportHeight`
+- `<path>` 的 `pathData` / `fillColor` / `fillAlpha` / `strokeColor` / `strokeAlpha` / `strokeWidth` / `strokeLineCap` / `strokeLineJoin` / `strokeMiterLimit`
+- `fillType="evenOdd"`
+- `#AARRGGBB` 色值转 `#RRGGBB` + opacity
+- `@color/...` 优先通过上传或粘贴的颜色资源 XML 解析，未找到时 warning 并用可配置兜底色
+- 支持 `<resources><color name="...">#...</color></resources>` 与 `res/color/*.xml` selector 默认色解析
+- `?attr/...` 资源引用 warning，并用可配置兜底色
+- `<group>` 的 translate / scale / rotation / pivot 基础转换
+- `<aapt:attr name="android:fillColor">` 里的 linear gradient 转 SVG `<linearGradient>`
+- `<clip-path android:pathData="...">` 转 SVG `<clipPath>` 并应用到后续 path
+
+---
+
 ## 🛠 技术说明（简要）
 
 - Figma Plugin API

@@ -17,7 +17,7 @@
 // ------------------------------
 // __html__ 是打包工具（或模板）把 ui.html 内联到代码中的变量。
 // showUI 的第二个参数可以控制面板大小。
-figma.showUI(__html__, { width: 360, height: 400 });
+figma.showUI(__html__, { width: 420, height: 720 });
 
 // ------------------------------
 // 2) 类型与工具函数
@@ -42,7 +42,9 @@ type PluginMessage =
   | { type: 'fitWidth' }
   | { type: 'fitHeight' }
   | { type: 'close' }
-  | { type: 'lineHeightPreset'; preset: LineHeightPreset };
+  | { type: 'lineHeightPreset'; preset: LineHeightPreset }
+  | { type: 'CREATE_SVG_FROM_ANDROID_XML'; payload: { svg: string; name?: string } }
+  | { type: 'CREATE_SVGS_FROM_ANDROID_XML'; payload: { items: { svg: string; name?: string }[] } };
 
 const LINE_HEIGHT_PRESETS: LineHeightPreset[] = [
   'auto',
@@ -286,6 +288,93 @@ function fitSelection(mode: FitMode) {
   figma.notify(msg);
 }
 
+function createSvgNodeFromAndroidXml(svg: unknown, name?: unknown): SceneNode | null {
+  if (!svg || typeof svg !== 'string') {
+    return null;
+  }
+
+  try {
+    const node = figma.createNodeFromSvg(svg);
+    if (name && typeof name === 'string') {
+      node.name = name;
+    }
+    figma.currentPage.appendChild(node);
+    return node;
+  } catch {
+    return null;
+  }
+}
+
+function createSvgFromAndroidXml(svg: unknown, name?: unknown) {
+  const node = createSvgNodeFromAndroidXml(svg, name);
+  if (!node) {
+    figma.notify('SVG 插入失败，请检查转换结果');
+    return;
+  }
+
+  const viewportCenter = figma.viewport.center;
+  node.x = viewportCenter.x - node.width / 2;
+  node.y = viewportCenter.y - node.height / 2;
+  figma.currentPage.selection = [node];
+  figma.viewport.scrollAndZoomIntoView([node]);
+  figma.notify('SVG 已插入当前页面');
+}
+
+function createMultipleSvgsFromAndroidXml(items: { svg?: string; name?: string }[] | undefined) {
+  if (!items?.length) {
+    figma.notify('没有可批量插入的 SVG');
+    return;
+  }
+
+  const created: SceneNode[] = [];
+  const gap = 48;
+  const columns = Math.min(6, Math.ceil(Math.sqrt(items.length)));
+  let x = 0;
+  let y = 0;
+  let rowHeight = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const node = createSvgNodeFromAndroidXml(item?.svg, item?.name);
+    if (!node) continue;
+
+    node.x = x;
+    node.y = y;
+    created.push(node);
+
+    rowHeight = Math.max(rowHeight, node.height);
+    if ((i + 1) % columns === 0) {
+      x = 0;
+      y += rowHeight + gap;
+      rowHeight = 0;
+    } else {
+      x += node.width + gap;
+    }
+  }
+
+  if (!created.length) {
+    figma.notify('SVG 批量插入失败，请检查转换结果');
+    return;
+  }
+
+  const minX = Math.min(...created.map((node) => node.x));
+  const minY = Math.min(...created.map((node) => node.y));
+  const maxX = Math.max(...created.map((node) => node.x + node.width));
+  const maxY = Math.max(...created.map((node) => node.y + node.height));
+  const viewportCenter = figma.viewport.center;
+  const offsetX = viewportCenter.x - (maxX - minX) / 2 - minX;
+  const offsetY = viewportCenter.y - (maxY - minY) / 2 - minY;
+
+  for (const node of created) {
+    node.x += offsetX;
+    node.y += offsetY;
+  }
+
+  figma.currentPage.selection = created;
+  figma.viewport.scrollAndZoomIntoView(created);
+  figma.notify(`SVG 批量插入完成：成功 ${created.length} 个`);
+}
+
 // ------------------------------
 // 4) 行高预设逻辑
 // ------------------------------
@@ -444,6 +533,15 @@ figma.ui.onmessage = async (msg: PluginMessage | { type?: string; [key: string]:
       if (isLineHeightPreset((msg as PluginMessage).preset)) {
         await applyLineHeightPreset((msg as PluginMessage).preset);
       }
+      return;
+    case 'CREATE_SVG_FROM_ANDROID_XML':
+      createSvgFromAndroidXml(
+        (msg as PluginMessage).payload?.svg,
+        (msg as PluginMessage).payload?.name
+      );
+      return;
+    case 'CREATE_SVGS_FROM_ANDROID_XML':
+      createMultipleSvgsFromAndroidXml((msg as PluginMessage).payload?.items);
       return;
     default:
       // 兜底：未知消息类型 → 安全忽略
